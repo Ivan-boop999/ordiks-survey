@@ -41,7 +41,10 @@ export class HttpClient {
     options: HttpRequestOptions = {},
   ): Promise<z.infer<TSchema>> {
     const response = await this.raw(path, options)
-    return schema.parse(await response.json())
+    // DELETE-эндпоинты отвечают 204 с пустым телом; `json()` на нём падает, поэтому пустой
+    // текст разбирается как undefined и валидируется схемой (z.void()/optional).
+    const text = await response.text()
+    return schema.parse(text ? (JSON.parse(text) as unknown) : undefined)
   }
 
   async raw(path: string, options: HttpRequestOptions = {}): Promise<Response> {
