@@ -3,17 +3,22 @@ import 'dotenv/config'
 import type { MemberRole, OrgRole, StageStatus, TaskStatus } from '@ordiks-survey/contracts'
 
 import { createPrisma, type DbClient } from '../src/db'
+import { loadEnv } from '../src/env'
+import { FilesystemPrivateStorage } from '../src/storage/filesystem-storage'
+import { assertSafeObjectKey, createPrivateStorage } from '../src/storage'
 
 /**
  * Демо-сид «Ордикс Обследование»: команда ОРДИКС, клиентские пользователи и проект
- * «ЖБИ-завод, Уфа» с этапами, доменами и чек-листами из кликабельного прототипа
- * (seedDemoState): тот же прогресс покрытия и те же задачи. Гайды, интервью, факты,
- * находки и процессы придут следующими волнами — здесь только то, что уже в схеме.
+ * «ЖБИ-завод, Уфа» с этапами, доменами, задачами, гайдами с условным вопросом, интервью
+ * (одно с заполненными ответами), фактами (пара фото — реальные объекты в локальном
+ * хранилище), запросами данных (два просрочены по относительным датам) и находками —
+ * всё из кликабельного прототипа (seedDemoState).
  *
  * Защита: запускается только при DEMO_SEED_ALLOWED=1 (осознанное решение владельца;
  * так делает и корневой Dockerfile). Идемпотентен: пользователи и члены — upsert по
  * email, проект — upsert по названию; у существующего проекта обновляется паспорт,
- * но прогресс (этапы/домены/задачи) не трогается.
+ * прогресс (этапы/домены/задачи) не трогается; сущности B2 засеиваются только если
+ * семейство пустое (повторный запуск их не дублирует).
  *
  * Пароли: DEMO_SEED_PASSWORD (по умолчанию `ordiks-demo`, 8+ символов) для всех
  * демо-аккаунтов; тестовый инвайт — код UFA-2026.
@@ -151,8 +156,7 @@ const demoStages: Array<{
   { name: 'Согласование и защита отчёта', start: 18, end: 35, milestone: true, status: 'planned' },
 ]
 
-/** Задачи из прототипа; домены ищутся по имени внутри проекта. */
-const demoTasks: Array<{
+/** Задачи из прототипа; домены ищутся по имени внутри проекта. */const demoTasks: Array<{
   title: string
   description?: string
   assignee: string
@@ -179,6 +183,392 @@ const day = 24 * 60 * 60 * 1000
 
 function addDays(days: number) {
   return new Date(Date.now() + days * day)
+}
+
+// ============================================================
+// Демо-данные волны B2: гайды, интервью, факты, запросы, находки
+// (перенос seedDemoState прототипа; даты — смещениями от сегодня)
+// ============================================================
+
+const demoGuides: Array<{
+  name: string
+  sections: Array<{
+    title: string
+    questions: Array<{
+      type: 'text' | 'yn' | 'scale' | 'choice' | 'multi'
+      text: string
+      options?: string[]
+      showIfIndex?: number
+      showIfValue?: string
+    }>
+  }>
+}> = [
+  {
+    name: 'Опросник: планирование производства',
+    sections: [
+      {
+        title: 'Текущий процесс',
+        questions: [
+          { type: 'text', text: 'Как заказ клиента превращается в план цеха? Кто участвует?' },
+          { type: 'yn', text: 'План фиксируется в единой системе?' },
+          { type: 'text', text: 'Если нет — где живёт план и кто его ведёт?', showIfIndex: 1, showIfValue: 'no' },
+          { type: 'scale', text: 'Насколько стабильно выполняется план месяца? (1 — постоянно срываем, 5 — почти всегда выполняем)' },
+        ],
+      },
+      {
+        title: 'Изменения и приоритеты',
+        questions: [
+          { type: 'choice', text: 'Как чаще всего поступают срочные заказы?', options: ['Вытесняют план', 'Вставляются в окна', 'Переносится другое', 'Другое'] },
+          { type: 'multi', text: 'Где живёт план сегодня?', options: ['Excel', '1С', 'Бумага', 'Мессенджеры', 'Доска в цехе'] },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'Опросник: ТОиР и оснастка',
+    sections: [
+      {
+        title: 'Оборудование',
+        questions: [
+          { type: 'text', text: 'Как ведётся учёт наработки оборудования?' },
+          { type: 'yn', text: 'Есть ли регламенты ППР на каждую единицу?' },
+          { type: 'scale', text: 'Насколько предсказуемы отказы? (1 — постоянно сюрпризы, 5 — всё по плану)' },
+        ],
+      },
+      {
+        title: 'Оснастка',
+        questions: [
+          { type: 'text', text: 'Как понимаете остаточный ресурс формы?' },
+          { type: 'choice', text: 'Что делаете с формой при исчерпании ресурса?', options: ['Ремонт', 'Списываем', 'Заказываем новую', 'Продолжаем до отказа'] },
+        ],
+      },
+    ],
+  },
+]
+
+const demoInterviews: Array<{
+  day: number
+  time: string
+  respondent: string
+  role: string
+  domain: string
+  status: 'planned' | 'done' | 'formatted'
+  guide?: number
+  notes: string
+  /** Ответы по индексам плоского списка вопросов гайда (значения как в прототипе). */
+  answers?: Record<number, string | string[]>
+}> = [
+  {
+    day: -1, time: '10:00', respondent: 'Рустем Гареев', role: 'Директор завода', domain: 'Продажи и договоры', status: 'done',
+    notes: 'Цифровизация — решение собственника. Главные боли: непрозрачность выполнения заказа, срыв сроков отгрузки, ручное сведение отчётов. Ожидание: «видеть заказ от оплаты до отгрузки». Бюджетный цикл — согласование с собственником.',
+  },
+  {
+    day: -1, time: '14:00', respondent: 'Марат Хайруллин', role: 'Начальник цеха плит', domain: 'Планирование: цех плит', status: 'done', guide: 0,
+    notes: 'План месяца — в Excel у ПДО, сменные задания — бумага. Мастер обходит посты, факт пишет в журнал к концу смены. Срочные заказы «по звонку» вытесняют план.',
+    answers: {
+      0: 'Заказ попадает в Excel ПДО, диспетчер раскидывает по цехам, цех пишет на бумагу.',
+      1: 'no',
+      // Условный вопрос раскрыт: исходный yn = no.
+      2: 'План месяца — в Excel у ПДО, сменные задания — на бумаге у мастеров.',
+      3: '2',
+      4: 'Вытесняют план',
+      5: ['Excel', 'Бумага', 'Мессенджеры'],
+    },
+  },
+  {
+    day: 0, time: '09:30', respondent: 'Ильдар Ахметов', role: 'Начальник цеха ВПИ №1', domain: 'Планирование: цех ВПИ №1', status: 'done', guide: 0,
+    notes: 'Работают по неделей скользящему графику. Загрузку линий держат в голове и на магнитной доске. Полуфабрикаты между ВПИ учитываются вручную.',
+  },
+  {
+    day: 1, time: '11:00', respondent: 'Гульнара Сафина', role: 'Начальник лаборатории', domain: 'Лаборатория', status: 'planned',
+    notes: '',
+  },
+  {
+    day: -2, time: '10:00', respondent: 'Айрат Сабиров', role: 'Мастер смены, цех плит', domain: 'Фактический выпуск', status: 'formatted', guide: 0,
+    notes: 'Смена 12 часов. Задания получают устно на планёрке + бумага. Выпуск пишет в журнал, брак — в отдельный тетради простоев. Итоги сдают мастеру, тот — в ПДО вечером.',
+  },
+]
+
+const demoFacts: Array<{
+  title: string
+  description: string
+  domain: string
+  shop: string
+  author: string
+  day: number
+  kind: 'photo' | 'file' | 'note'
+  typeKey: string
+  fileName?: string
+  /** Реальная загрузка в локальное хранилище (filesystem-драйвер); иначе демо-фото без объекта. */
+  realPhoto?: boolean
+}> = [
+  { title: 'Журнал смены, цех плит', description: 'Факт выпуска мастер записывает вручную в журнал в конце смены.', domain: 'Фактический выпуск', shop: 'Цех плит', author: 'anna@ordiks.ru', day: -1, kind: 'photo', typeKey: 'photo', realPhoto: true },
+  { title: 'План месяца в Excel (ПДО)', description: 'Один файл, 14 листов, правят 3 человека одновременно по сети.', domain: 'Диспетчеризация', shop: 'ПДО', author: 'ivan@ordiks.ru', day: -1, kind: 'photo', typeKey: 'photo', realPhoto: true },
+  { title: 'Магнитная доска загрузки ВПИ №1', description: 'Фактическая загрузка линий видна только стоя у доски.', domain: 'Планирование: цех ВПИ №1', shop: 'Цех ВПИ №1', author: 'anna@ordiks.ru', day: 0, kind: 'photo', typeKey: 'photo' },
+  { title: 'Форма плит после 400+ циклов', description: 'Рабочая кромка изношена, геометрия на грани допуска. Ресурс форм нигде не учитывается.', domain: 'Оснастка: формы и матрицы', shop: 'Цех плит', author: 'ivan@ordiks.ru', day: 0, kind: 'photo', typeKey: 'photo' },
+  { title: 'Тетрадь простоев, ВПИ №2', description: 'Простои фиксируются от руки; причина указывается в свободной форме.', domain: 'Фактический выпуск', shop: 'Цех ВПИ №2', author: 'anna@ordiks.ru', day: 0, kind: 'photo', typeKey: 'photo' },
+  { title: 'Стенд паспортов качества', description: 'Паспорта печатаются пакетом раз в день, привязка к партии — ручная.', domain: 'Лаборатория', shop: 'Лаборатория', author: 'ivan@ordiks.ru', day: -1, kind: 'photo', typeKey: 'photo' },
+  { title: 'Склад ГП: площадка без адресации', description: 'Готовая продукция на площадках, поиск паллеты — глазами и опытом кладовщика.', domain: 'Склад готовой продукции', shop: 'Склад ГП', author: 'anna@ordiks.ru', day: 0, kind: 'photo', typeKey: 'photo' },
+  { title: 'Двойной ввод отгрузки', description: 'Отгрузка вводится в 1С бухгалтерией и параллельно в таблицу логиста — расхождения разбирают по телефону.', domain: 'Отгрузка', shop: 'Отдел продаж', author: 'ivan@ordiks.ru', day: -1, kind: 'note', typeKey: 'note' },
+  { title: 'Наработка оборудования', description: 'Часы наработки нигде не накапливаются; ППР по календарю «раз в полгода», без привязки к фактической загрузке.', domain: 'ТОиР и ППР', shop: 'ОГМ', author: 'ivan@ordiks.ru', day: -2, kind: 'note', typeKey: 'gauge' },
+  { title: 'Выгрузка 1С: отгрузки 12 мес.', description: 'Получили от бухгалтерии, формат — xls.', domain: 'Отгрузка', shop: 'Бухгалтерия', author: 'olga@demo.ordiks.ru', day: -2, kind: 'file', typeKey: 'file', fileName: 'otgruzki_12m.xls' },
+  { title: 'Регламент ППР (фрагмент)', description: 'Общий документ 2019 года, не привязан к единицам оборудования.', domain: 'ТОиР и ППР', shop: 'ОГМ', author: 'marat@demo.ordiks.ru', day: -2, kind: 'file', typeKey: 'file', fileName: 'reglament_ppr_2019.pdf' },
+  { title: 'Оператор поста формовки', description: 'Оператор отмечает выполненные операции в наряде-бумаге, штамп у мастера.', domain: 'Фактический выпуск', shop: 'Цех ВПИ №1', author: 'anna@ordiks.ru', day: 0, kind: 'photo', typeKey: 'photo' },
+]
+
+const demoRequests: Array<{
+  what: string
+  why: string
+  domain: string
+  assignee: string
+  deadline: number
+  createdAt: number
+  status: 'requested' | 'in_progress' | 'received'
+}> = [
+  { what: 'Реестр оборудования с инвентарными номерами', why: 'База для анализа ТОиР и наработки', domain: 'ТОиР и ППР', assignee: 'olga@demo.ordiks.ru', deadline: -2, createdAt: -6, status: 'requested' },
+  { what: 'Реестр форм и матриц с количеством циклов', why: 'Оценка остаточного ресурса оснастки', domain: 'Оснастка: формы и матрицы', assignee: 'marat@demo.ordiks.ru', deadline: -1, createdAt: -5, status: 'requested' },
+  { what: 'Выгрузка отгрузок из 1С за 12 месяцев', why: 'Анализ структуры заказов и сезонности', domain: 'Отгрузка', assignee: 'olga@demo.ordiks.ru', deadline: -3, createdAt: -8, status: 'received' },
+  { what: 'Действующие регламенты ППР', why: 'Сравнение с фактическим обслуживанием', domain: 'ТОиР и ППР', assignee: 'marat@demo.ordiks.ru', deadline: 3, createdAt: -4, status: 'in_progress' },
+  { what: 'Схема сети и список серверов', why: 'Оценка ИТ-инфраструктуры для целевой архитектуры', domain: 'Инфраструктура', assignee: 'olga@demo.ordiks.ru', deadline: 4, createdAt: -3, status: 'in_progress' },
+]
+
+const demoFindings: Array<{
+  title: string
+  description: string
+  category: string
+  priority: string
+  domain: string
+  factTitle?: string
+  owner: string
+  status: string
+  day: number
+}> = [
+  { title: 'Факт смены появляется на следующий день', description: 'Мастер сдаёт журнал вечером, ПДО сводит утром. Руководство видит картину суток с задержкой и без причин отклонений.', category: 'Процесс', priority: 'Критично', domain: 'Фактический выпуск', factTitle: 'Журнал смены, цех плит', owner: 'ivan@ordiks.ru', status: 'confirmed', day: -2 },
+  { title: 'План производства существует в 3 несвязанных местах', description: 'Excel ПДО, бумажные сменные задания и магнитная доска. Единой версии плана нет, изменения не синхронизируются.', category: 'Данные', priority: 'Критично', domain: 'Планирование: цех плит', factTitle: 'План месяца в Excel (ПДО)', owner: 'anna@ordiks.ru', status: 'confirmed', day: -2 },
+  { title: 'Ресурс оснастки не учитывается', description: 'Формы и матрицы не имеют паспорта циклов. Риск брака по геометрии и внезапной остановки цеха плит.', category: 'Оборудование', priority: 'Высокий', domain: 'Оснастка: формы и матрицы', factTitle: 'Форма плит после 400+ циклов', owner: 'ivan@ordiks.ru', status: 'registered', day: -1 },
+  { title: 'ППР по календарю, а не по наработке', description: 'Обслуживание раз в полгода независимо от загрузки: перерасход на тихих машинах и внезапные отказы на нагруженных.', category: 'Процесс', priority: 'Высокий', domain: 'ТОиР и ППР', factTitle: 'Наработка оборудования', owner: 'ivan@ordiks.ru', status: 'discussed', day: -1 },
+  { title: 'Двойной ввод отгрузок', description: '1С + таблица логиста, расхождения разбираются по телефону.', category: 'Данные', priority: 'Средний', domain: 'Отгрузка', factTitle: 'Двойной ввод отгрузки', owner: 'anna@ordiks.ru', status: 'registered', day: 0 },
+  { title: 'Склад без адресации и резервирования', description: 'Поиск паллеты — опытом кладовщика; резерв под заказ не виден продажам.', category: 'Процесс', priority: 'Средний', domain: 'Склад готовой продукции', factTitle: 'Склад ГП: площадка без адресации', owner: 'anna@ordiks.ru', status: 'registered', day: 0 },
+  { title: 'Нет связи планов с ППР', description: 'Производственный план не учитывает планируемые остановки оборудования: конфликты всплывают в момент остановки.', category: 'Организация', priority: 'Высокий', domain: 'Диспетчеризация', owner: 'ivan@ordiks.ru', status: 'confirmed', day: 0 },
+]
+
+/// Минимальный валидный JPEG 1×1: демо-фото в локальном хранилище (сером пикселе достаточно,
+/// содержимое в демо условно).
+const demoPhotoBytes = Uint8Array.from(
+  atob(
+    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/2gAMAwEAAhEDEQA/AKgA/9k=',
+  ),
+  (character) => character.charCodeAt(0),
+)
+
+/** Кладёт демо-объект в локальное хранилище; недоступно/не filesystem — просто пропускаем. */
+async function putDemoStorageObject(
+  env: Record<string, string | undefined>,
+  projectId: string,
+  bytes: Uint8Array,
+): Promise<string | null> {
+  const key = `projects/${projectId}/facts/${crypto.randomUUID()}`
+  try {
+    const appEnv = loadEnv(env)
+    const storage = createPrivateStorage(appEnv).storage
+    if (!(storage instanceof FilesystemPrivateStorage)) return null
+    await storage.putObjectOnce(assertSafeObjectKey(key), bytes, 'image/jpeg')
+    return key
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Сущности B2 сеются только в пустые семейства: свежий проект получает всё сразу, проект
+ * времён B1 — досеивается один раз, повторные запуски ничего не дублируют и не затирают.
+ */
+async function seedSurveyEntities(
+  db: DbClient,
+  project: { id: string },
+  users: Map<string, { id: string; email: string }>,
+  env: Record<string, string | undefined>,
+) {
+  const domains = await db.domain.findMany({
+    where: { projectId: project.id },
+    select: { id: true, name: true },
+  })
+  const domainId = (name: string) => domains.find((domain) => domain.name === name)?.id ?? null
+  const userId = (email: string) => users.get(email)?.id
+
+  const [factCount, guideCount, interviewCount, requestCount, findingCount] = await Promise.all([
+    db.fact.count({ where: { projectId: project.id } }),
+    db.guide.count({ where: { projectId: project.id } }),
+    db.interview.count({ where: { projectId: project.id } }),
+    db.dataRequest.count({ where: { projectId: project.id } }),
+    db.finding.count({ where: { projectId: project.id } }),
+  ])
+
+  let factIdByTitle = new Map<string, string>()
+
+  if (factCount === 0) {
+    for (const fact of demoFacts) {
+      // Реальные фото кладём в локальное хранилище, когда это просто (filesystem-драйвер);
+      // остальные фото — демо-фото без объекта, файлы выгрузок — просто ярлык с именем файла.
+      let objectKey: string | null = null
+      if (fact.realPhoto) {
+        objectKey = await putDemoStorageObject(env, project.id, demoPhotoBytes)
+      }
+      const description = fact.kind === 'photo' && !objectKey
+        ? `${fact.description} (демо-фото)`
+        : fact.description
+      const created = await db.fact.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(fact.domain),
+          authorId: userId(fact.author)!,
+          kind: fact.kind,
+          typeKey: fact.typeKey,
+          title: fact.title,
+          description,
+          shop: fact.shop,
+          factDate: addDays(fact.day),
+          objectKey,
+          fileName: fact.fileName ?? (objectKey ? `${fact.typeKey}-demo.jpg` : null),
+        },
+        select: { id: true, title: true },
+      })
+      factIdByTitle.set(created.title, created.id)
+    }
+  } else {
+    const rows = await db.fact.findMany({ where: { projectId: project.id }, select: { id: true, title: true } })
+    factIdByTitle = new Map(rows.map((row) => [row.title, row.id]))
+  }
+
+  const guideIdByIndex = new Map<number, string>()
+  if (guideCount === 0) {
+    for (const [guideIndex, guide] of demoGuides.entries()) {
+      const created = await db.$transaction(async (tx) => {
+        const guideRow = await tx.guide.create({
+          data: { projectId: project.id, name: guide.name },
+        })
+        for (const [sectionIndex, section] of guide.sections.entries()) {
+          const sectionRow = await tx.guideSection.create({
+            data: { guideId: guideRow.id, title: section.title, sortOrder: sectionIndex },
+          })
+          for (const [questionIndex, question] of section.questions.entries()) {
+            await tx.guideQuestion.create({
+              data: {
+                sectionId: sectionRow.id,
+                type: question.type,
+                text: question.text,
+                options: question.options ?? [],
+                sortOrder: questionIndex,
+              },
+            })
+          }
+        }
+        return guideRow
+      })
+
+      // Перевязка showIf: индексы плоского списка вопросов гайда → реальные id.
+      const flatQuestions = await db.guideQuestion.findMany({
+        where: { section: { guideId: created.id } },
+        orderBy: [{ section: { sortOrder: 'asc' } }, { sortOrder: 'asc' }],
+      })
+      for (const section of guide.sections) {
+        for (const question of section.questions) {
+          if (question.showIfIndex === undefined) continue
+          const dependent = flatQuestions.find((row) => row.text === question.text)
+          const source = flatQuestions[question.showIfIndex]
+          if (dependent && source) {
+            await db.guideQuestion.update({
+              where: { id: dependent.id },
+              data: { showIfQuestionId: source.id, showIfValue: question.showIfValue ?? null },
+            })
+          }
+        }
+      }
+      guideIdByIndex.set(guideIndex, created.id)
+    }
+  } else {
+    const rows = await db.guide.findMany({
+      where: { projectId: project.id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    rows.forEach((row, index) => guideIdByIndex.set(index, row.id))
+  }
+
+  if (interviewCount === 0) {
+    for (const interview of demoInterviews) {
+      const created = await db.interview.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(interview.domain),
+          guideId: interview.guide !== undefined ? guideIdByIndex.get(interview.guide) ?? null : null,
+          scheduledAt: new Date(`${addDays(interview.day).toISOString().slice(0, 10)}T${interview.time}:00.000Z`),
+          respondent: interview.respondent,
+          respondentRole: interview.role,
+          status: interview.status,
+          notes: interview.notes,
+        },
+      })
+      if (interview.answers && created.guideId) {
+        const questions = await db.guideQuestion.findMany({
+          where: { section: { guideId: created.guideId } },
+          orderBy: [{ section: { sortOrder: 'asc' } }, { sortOrder: 'asc' }],
+        })
+        for (const [index, value] of Object.entries(interview.answers)) {
+          const question = questions[Number(index)]
+          if (!question) continue
+          await db.interviewAnswer.create({
+            data: { interviewId: created.id, questionId: question.id, value },
+          })
+        }
+      }
+    }
+  }
+
+  if (requestCount === 0) {
+    for (const request of demoRequests) {
+      await db.dataRequest.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(request.domain),
+          assigneeId: userId(request.assignee) ?? null,
+          what: request.what,
+          why: request.why,
+          deadline: addDays(request.deadline),
+          status: request.status,
+          createdAt: addDays(request.createdAt),
+          receivedAt: request.status === 'received' ? addDays(request.deadline) : null,
+        },
+      })
+    }
+  }
+
+  if (findingCount === 0) {
+    for (const finding of demoFindings) {
+      await db.finding.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(finding.domain),
+          factId: finding.factTitle ? factIdByTitle.get(finding.factTitle) ?? null : null,
+          ownerId: userId(finding.owner) ?? null,
+          title: finding.title,
+          description: finding.description,
+          category: finding.category,
+          priority: finding.priority,
+          status: finding.status,
+          createdAt: addDays(finding.day),
+        },
+      })
+    }
+  }
+
+  return {
+    facts: factCount > 0 ? 0 : demoFacts.length,
+    guides: guideCount > 0 ? 0 : demoGuides.length,
+    interviews: interviewCount > 0 ? 0 : demoInterviews.length,
+    requests: requestCount > 0 ? 0 : demoRequests.length,
+    findings: findingCount > 0 ? 0 : demoFindings.length,
+  }
 }
 
 function domainStatus(done: number | undefined, checklistLength: number): 'not_started' | 'in_progress' | 'closed' {
@@ -216,7 +606,7 @@ async function upsertDemoUser(db: DbClient, user: DemoUser, password: string) {
   })
 }
 
-async function seedDemoData(db: DbClient, password: string) {
+async function seedDemoData(db: DbClient, password: string, env: Record<string, string | undefined>) {
   const users = new Map<string, { id: string; email: string }>()
   for (const user of demoUsers) {
     users.set(user.email, await upsertDemoUser(db, user, password))
@@ -344,7 +734,10 @@ async function seedDemoData(db: DbClient, password: string) {
     })
   }
 
-  return { project, createdProject, users: [...users.values()] }
+  // Сущности волны B2: гайды, интервью, факты, запросы, находки — только в пустые семейства.
+  const seeded = await seedSurveyEntities(db, project, users, env)
+
+  return { project, createdProject, seeded, users: [...users.values()] }
 }
 
 const env = Bun.env
@@ -366,12 +759,20 @@ const password = env.DEMO_SEED_PASSWORD?.trim() || DEFAULT_DEMO_PASSWORD
 
 const prisma = createPrisma(databaseUrl)
 try {
-  const result = await seedDemoData(prisma, password)
+  const result = await seedDemoData(prisma, password, Bun.env)
   console.log(`Seeded ${result.users.length} demo users (password: ${password}).`)
   console.log(
     result.createdProject
-      ? `Created demo project «${DEMO_PROJECT_NAME}» with stages, domains, and tasks.`
+      ? `Created demo project «${DEMO_PROJECT_NAME}» with stages, domains, tasks, guides, interviews, facts, requests, and findings.`
       : `Refreshed the passport of existing demo project «${DEMO_PROJECT_NAME}»; progress untouched.`,
+  )
+  const seededFamilies = Object.entries(result.seeded)
+    .filter(([, count]) => count > 0)
+    .map(([family, count]) => `${count} ${family}`)
+  console.log(
+    seededFamilies.length > 0
+      ? `Seeded survey entities into empty families: ${seededFamilies.join(', ')}.`
+      : 'Survey entities already present; nothing re-seeded.',
   )
   console.log(`Demo invite ${DEMO_INVITE_CODE} is available for the client team (client_lead).`)
 } finally {
