@@ -8,7 +8,9 @@ import type {
   CreateChecklistItemRequest,
   BulkUpdateFindingsRequest,
   CreateDataRequestRequest,
+  CreateFactRequest,
   CreateFindingRequest,
+  UpdateFactRequest,
   UpdateFindingRequest,
   CreateDomainGroupRequest,
   CreateDomainRequest,
@@ -28,6 +30,7 @@ import type {
   UpdateTaskRequest,
 } from '@ordiks-survey/contracts'
 
+import { uploadFactFile } from './fact-upload'
 import { useAuth } from '@/features/auth'
 import type { AuthenticatedTransport } from '@/platform/api'
 import {
@@ -35,8 +38,11 @@ import {
   bulkUpdateFindings,
   createChecklistItem,
   createDataRequest,
+  createFact,
   createFinding,
+  deleteFact,
   deleteFinding,
+  updateFact,
   updateFinding,
   createDomain,
   createDomainGroup,
@@ -494,4 +500,46 @@ export function factsQueryOptions(transport: AuthenticatedTransport, projectId: 
 export function useFactsQuery(projectId: string) {
   const auth = useAuth()
   return useQuery(factsQueryOptions(auth.transport, projectId))
+}
+
+export function useCreateFactMutation(projectId: string) {
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateFactRequest) => createFact(auth.transport, projectId, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.project(projectId) }),
+  })
+}
+
+export function useUpdateFactMutation(projectId: string) {
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ factId, ...input }: { factId: string } & UpdateFactRequest) =>
+      updateFact(auth.transport, factId, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.project(projectId) }),
+  })
+}
+
+export function useUploadFactFileMutation(projectId: string) {
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ factId, file }: { factId: string; file: File }) =>
+      uploadFactFile(auth.transport, factId, file),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.project(projectId) }),
+  })
+}
+
+export function useDeleteFactMutation(projectId: string) {
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (factId: string) => deleteFact(auth.transport, factId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.project(projectId) }),
+  })
 }

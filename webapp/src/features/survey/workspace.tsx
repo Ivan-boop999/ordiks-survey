@@ -13,6 +13,7 @@ import {
   type SurveySection,
 } from './model'
 import { ComingSoonPage } from './pages/ComingSoonPage'
+import { FactsPage } from './pages/FactsPage'
 import { FindingsPage } from './pages/FindingsPage'
 import { RequestsPage } from './pages/RequestsPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -29,7 +30,6 @@ import { useSurveyProject } from './use-survey-project'
 const COMING_SOON_SECTIONS = new Set([
   'interviews',
   'guides',
-  'facts',
   'findings',
   'processes',
   'analytics',
@@ -166,6 +166,7 @@ export function SurveySectionPage() {
     case 'interviews':
     case 'guides':
     case 'facts':
+      return <FactsPage />
     case 'requests':
       return <RequestsPage />
     case 'findings':

@@ -11,9 +11,11 @@ import {
   createProjectRequestSchema,
   createStageRequestSchema,
   createTaskRequestSchema,
+  createFactRequestSchema,
   createFindingRequestSchema,
   dataRequestSchema,
   factsResponseSchema,
+  factSchema,
   findingSchema,
   dataRequestsQuerySchema,
   dataRequestsResponseSchema,
@@ -36,6 +38,7 @@ import {
   updateChecklistItemRequestSchema,
   updateDataRequestRequestSchema,
   updateDataRequestStatusRequestSchema,
+  updateFactRequestSchema,
   updateFindingRequestSchema,
   updateDomainGroupRequestSchema,
   updateDomainRequestSchema,
@@ -47,6 +50,7 @@ import {
   type CreateDataRequestRequest,
   type BulkUpdateFindingsRequest,
   type CreateDomainGroupRequest,
+  type CreateFactRequest,
   type CreateFindingRequest,
   type CreateDomainRequest,
   type CreateProjectRequest,
@@ -59,6 +63,7 @@ import {
   type UpdateChecklistItemRequest,
   type UpdateDataRequestRequest,
   type UpdateDataRequestStatusRequest,
+  type UpdateFactRequest,
   type UpdateFindingRequest,
   type UpdateDomainGroupRequest,
   type UpdateDomainRequest,
@@ -493,4 +498,34 @@ export function factFileDownloadUrl(
   factId: string,
 ): Promise<{ url: string }> {
   return transport.request(`/api/facts/${id(factId)}/file/download`, z.object({ url: z.string() }))
+}
+
+// ============================================================
+// Факты: CRUD (загрузка файла — fact-upload.ts)
+// ============================================================
+
+export function createFact(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateFactRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/facts`, factSchema, {
+    method: 'POST',
+    body: createFactRequestSchema.parse(input),
+  })
+}
+
+export function updateFact(
+  transport: AuthenticatedTransport,
+  factId: string,
+  input: UpdateFactRequest,
+) {
+  return transport.request(`/api/facts/${id(factId)}`, factSchema, {
+    method: 'PATCH',
+    body: updateFactRequestSchema.parse(input),
+  })
+}
+
+export function deleteFact(transport: AuthenticatedTransport, factId: string) {
+  return transport.request(`/api/facts/${id(factId)}`, noContent, { method: 'DELETE' })
 }
