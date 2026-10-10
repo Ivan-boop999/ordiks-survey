@@ -43,7 +43,7 @@ Cron, the scheduler, and the worker use `createBackgroundRuntime`. It replaces `
 - Production-like runtimes (`NODE_ENV=production` or `COOKIE_SECURE=true`) require HTTPS `CORS_ORIGINS` and a `JWT_SECRET` of at least 64 hex characters (`openssl rand -hex 32`). `NODE_ENV=production` also requires `COOKIE_SECURE=true`.
 - `src/db.ts` adds `uselibpqcompat=true` to a `DATABASE_URL` with `sslmode=require`, so TLS behaves as in libpq.
 - Seeds: `bun run dev:seed` creates the local admin and user from `DEV_SEED_*`. It refuses production and non-loopback database URLs. A rerun with a changed password rehashes it and revokes that account's sessions. `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` feed only `db:deploy`, which creates the first production admin (12–128 characters, no placeholder or repeated pattern).
-- Demo data: `DEMO_SEED_ALLOWED=1 bun run demo:seed` seeds the Ordiks team, client portal users, and the «ЖБИ-завод, Уфа» demo project with stages, domains, checklists, and tasks (`DEMO_SEED_PASSWORD` for every account, `ordiks-demo` by default). The flag is the only gate — the deploy container passes it deliberately — and the seed is idempotent: it upserts users, members, and the invite, and never touches an existing project's progress.
+- Demo data: `DEMO_SEED_ALLOWED=1 bun run demo:seed` seeds the Ordiks team, client portal users, and the «ЖБИ-завод, Уфа» demo project with stages, domains, checklists, tasks, guides with a conditional question, interviews (one with answers), facts (two photos become real objects in filesystem storage), data requests (two overdue), and findings (`DEMO_SEED_PASSWORD` for every account, `ordiks-demo` by default). The flag is the only gate — the deploy container passes it deliberately — and the seed is idempotent: it upserts users, members, and the invite, never touches an existing project's progress, and seeds survey entities only into empty families.
 
 ## API
 
@@ -56,6 +56,11 @@ Cron, the scheduler, and the worker use `createBackgroundRuntime`. It replaces `
 | `/api/admin/*` | users | Dashboard, user directory, role changes; `admin` only |
 | `/api/uploads/*` | uploads | Avatar upload, finalize, read, and delete |
 | `/api/projects/*`, `/api/stages/*`, `/api/tasks/*`, `/api/domain-groups/*`, `/api/domains/*`, `/api/checklist-items/*` | projects | Survey projects and members, stages, tasks, domain coverage with checklists |
+| `/api/projects/{id}/facts`, `/api/facts/*` | survey | Facts with domain/shop/kind/type/author filters and search; private file upload (`upload-request` → PUT → `confirm`), signed download for every project role |
+| `/api/projects/{id}/guides`, `/api/guides/*`, `/api/guide-sections/*`, `/api/guide-questions/*` | survey | Interview guides with sections and questions, conditional `showIf`, duplicate with rebinding |
+| `/api/projects/{id}/interviews`, `/api/interviews/*` | survey | Interviews; `PUT /api/interviews/{id}/answers` validates by guide types and drops condition-hidden answers |
+| `/api/projects/{id}/requests`, `/api/requests/*` | survey | Data requests to the client; on-the-fly `overdue`; `PATCH /status` is the client portal scenario (client_lead/client_staff) |
+| `/api/projects/{id}/findings`, `/api/findings/*` | survey | Findings validated against project dictionaries; team-only bulk status change |
 | `/api/invites/*` | invites | Invite codes for the team and clients; public `/api/invites/accept` |
 | `/storage/*` | storage | Signed local URLs; `filesystem` driver only |
 | `/health/live`, `/health/ready` | app | Liveness; readiness (`SELECT 1`, cached for one second, `200` or `503`) |

@@ -41,3 +41,5 @@ export function createProjectsModule({ db, requireAuth }: CreateProjectsModuleOp
 export { accessFor, canEditProject, canViewProject, isTeamOrgRole, canManageMembers } from './domain/access'
 export type { ProjectAccessContext } from './domain/access'
 export { ProjectAccessGuard } from './application/access-guard'
+// Survey-модуль потребляет guard и должен интерпретировать его отказы теми же кодами.
+export { ProjectsFailure, type ProjectsFailureKind } from './domain/errors'

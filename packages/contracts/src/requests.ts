@@ -40,8 +40,12 @@ export const dataRequestsQuerySchema = z
   .object({
     status: requestStatusSchema.optional(),
     domainId: uuidSchema.optional(),
-    /// Только просроченные (или только не просроченные при false).
-    overdue: z.coerce.boolean().optional(),
+    /// Только просроченные (или только не просроченные при false). Строка запроса, поэтому
+    /// булево разбираем явно: coerce превратил бы "false" в true.
+    overdue: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
   })
   .strict()
 export type DataRequestsQuery = z.infer<typeof dataRequestsQuerySchema>

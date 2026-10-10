@@ -5,7 +5,6 @@ import { factKindSchema } from './survey'
 const isoDateTime = z.string().datetime()
 const idSchema = z.string().min(1)
 const uuidSchema = z.uuid()
-const nullableDateTime = z.union([isoDateTime, z.null()])
 
 // ============================================================
 // Факты
@@ -95,6 +94,7 @@ export type CreateFactRequest = z.infer<typeof createFactRequestSchema>
 export const updateFactRequestSchema = z
   .object({
     ...factCoreSchema,
+    kind: factKindSchema.optional(),
     title: z.string().trim().min(1).max(300).optional(),
     description: z.string().max(4000).optional(),
     shop: z.string().trim().max(120).optional(),

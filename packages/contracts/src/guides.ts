@@ -65,7 +65,11 @@ const questionWriteSchema = {
   sortOrder: z.number().int().nonnegative().optional(),
 }
 
-/** Гайд целиком при создании: имя + дерево секций/вопросов (для импорта из шаблона/библиотеки). */
+/**
+ * Гайд целиком при создании: имя + дерево секций/вопросов (для импорта из шаблона/библиотеки).
+ * Вопрос может нести клиентский `id`: он нужен только для ссылок showIfQuestionId внутри
+ * этого же запроса — сервер создаст свои id и перевяжет условия (как nid() в прототипе).
+ */
 export const createGuideRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
@@ -75,7 +79,10 @@ export const createGuideRequestSchema = z
           .object({
             title: z.string().trim().min(1).max(200),
             sortOrder: z.number().int().nonnegative().optional(),
-            questions: z.array(z.object(questionWriteSchema).strict()).max(100).default([]),
+            questions: z
+              .array(z.object({ id: uuidSchema.optional(), ...questionWriteSchema }).strict())
+              .max(100)
+              .default([]),
           })
           .strict(),
       )
