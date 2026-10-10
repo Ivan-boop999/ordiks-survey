@@ -19,14 +19,23 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/features/auth'
-import { isTeamOrgRole, PROJECT_STATUS_META, sectionPath } from '../model'
+import { isTeamOrgRole, pluralRu, PROJECT_STATUS_META, sectionPath } from '../model'
 import {
   useArchiveProjectMutation,
+  useCreateProjectFromTemplateMutation,
   useCreateProjectMutation,
-  useProjectsQuery,
   useProjectCoverage,
+  useProjectsQuery,
+  useProjectTemplatesQuery,
 } from '../queries'
 
 /**
@@ -168,11 +177,18 @@ function CreateProjectDialog({
   open: boolean
 }) {
   const create = useCreateProjectMutation()
+  const createFromTemplate = useCreateProjectFromTemplateMutation()
+  const templatesQuery = useProjectTemplatesQuery()
+  const templates = templatesQuery.data?.items ?? []
   const [name, setName] = useState('')
   const [client, setClient] = useState('')
   const [city, setCity] = useState('')
   const [shops, setShops] = useState('')
+  const [templateId, setTemplateId] = useState('blank')
   const [error, setError] = useState<string | null>(null)
+
+  const selectedTemplate = templates.find((template) => template.id === templateId) ?? null
+  const pending = create.isPending || createFromTemplate.isPending
 
   const submit = () => {
     setError(null)
@@ -184,6 +200,33 @@ function CreateProjectDialog({
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
+    const options = {
+      onSuccess: () => {
+        toast.success('Проект создан')
+        onOpenChange(false)
+        setName('')
+        setClient('')
+        setCity('')
+        setShops('')
+        setTemplateId('blank')
+      },
+      onError: (mutationError: Error) => {
+        setError(mutationError.message || 'Не удалось создать проект')
+      },
+    }
+    if (selectedTemplate) {
+      createFromTemplate.mutate(
+        {
+          templateId: selectedTemplate.id,
+          name: name.trim(),
+          client: client.trim(),
+          city: city.trim(),
+          shops: shopsList,
+        },
+        options,
+      )
+      return
+    }
     create.mutate(
       {
         name: name.trim(),
@@ -193,21 +236,7 @@ function CreateProjectDialog({
         boundaries: '',
         goals: '',
       },
-      {
-        onSuccess: () => {
-          toast.success('Проект создан')
-          onOpenChange(false)
-          setName('')
-          setClient('')
-          setCity('')
-          setShops('')
-        },
-        onError: (mutationError) => {
-          setError(
-            mutationError instanceof Error ? mutationError.message : 'Не удалось создать проект',
-          )
-        },
-      },
+      options,
     )
   }
 
@@ -261,9 +290,25 @@ function CreateProjectDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="project-template">Шаблон</FieldLabel>
-            <Input disabled id="project-template" value="Пустой проект" />
-            {/* TODO(B3): список шаблонов из API, когда появится GET /api/templates. */}
+            <FieldLabel>Шаблон</FieldLabel>
+            <Select onValueChange={setTemplateId} value={templateId}>
+              <SelectTrigger aria-label="Шаблон проекта" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="blank">Пустой проект</SelectItem>
+                {templates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Typography as="p" tone="muted" variant="caption">
+              {selectedTemplate
+                ? templateSummary(selectedTemplate)
+                : 'Этапы и домены добавите вручную на разделах «Этапы» и «Домены».'}
+            </Typography>
           </Field>
           {error ? (
             <Typography as="p" className="text-red-600" role="alert" variant="bodySm">
@@ -275,11 +320,39 @@ function CreateProjectDialog({
           <Button onClick={() => onOpenChange(false)} variant="outline">
             Отмена
           </Button>
-          <Button data-testid="project-create-submit" disabled={create.isPending} onClick={submit}>
-            {create.isPending ? 'Создаём…' : 'Создать'}
+          <Button data-testid="project-create-submit" disabled={pending} onClick={submit}>
+            {pending ? 'Создаём…' : 'Создать'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
+}
+
+/** Краткое описание шаблона под селектором: этапы, домены, гайды. */
+function templateSummary(template: {
+  description: string
+  payload: { stageNames: string[]; domains: { name: string }[]; guides: { name: string }[] }
+}): string {
+  const parts: string[] = []
+  if (template.payload.stageNames.length > 0) {
+    parts.push(
+      `${template.payload.stageNames.length} ${pluralRu(template.payload.stageNames.length, 'этап', 'этапа', 'этапов')}`,
+    )
+  }
+  if (template.payload.domains.length > 0) {
+    parts.push(
+      `${template.payload.domains.length} ${pluralRu(template.payload.domains.length, 'домен', 'домена', 'доменов')}`,
+    )
+  }
+  if (template.payload.guides.length > 0) {
+    parts.push(
+      `${template.payload.guides.length} ${pluralRu(template.payload.guides.length, 'гайд', 'гайда', 'гайдов')}`,
+    )
+  }
+  const summary = parts.join(' · ')
+  if (template.description.trim()) {
+    return summary ? `${template.description.trim()} · ${summary}` : template.description.trim()
+  }
+  return summary || 'Методика из библиотеки шаблонов.'
 }
