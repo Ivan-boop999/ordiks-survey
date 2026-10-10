@@ -13,9 +13,12 @@ import {
   type SurveySection,
 } from './model'
 import { ComingSoonPage } from './pages/ComingSoonPage'
+import { AnalyticsPage } from './pages/AnalyticsPage'
 import { FactsPage } from './pages/FactsPage'
 import { FindingsPage } from './pages/FindingsPage'
 import { InterviewsPage } from './pages/InterviewsPage'
+import { ProcessesPage } from './pages/ProcessesPage'
+import { ReportPage } from './pages/ReportPage'
 import { RequestsPage } from './pages/RequestsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DomainsPage } from './pages/DomainsPage'
@@ -26,16 +29,6 @@ import { useProjectsQuery, useProjectQuery } from './queries'
 import { SurveyShell } from './shell/SurveyShell'
 import { SurveyProjectProvider } from './context'
 import { useSurveyProject } from './use-survey-project'
-
-/** Разделы волн после F1 — страницы-заглушки. */
-const COMING_SOON_SECTIONS = new Set([
-  'guides',
-  'findings',
-  'processes',
-  'analytics',
-  'report',
-  'settings',
-])
 
 function readLastProjectId(): string | null {
   try {
@@ -149,9 +142,6 @@ export function SurveySectionPage() {
   if (!isSectionAllowed(viewRole, section)) {
     return <HrefRedirect href={sectionPath(projectId, 'dashboard')} />
   }
-  if (COMING_SOON_SECTIONS.has(section)) {
-    return <ComingSoonPage section={section} />
-  }
   switch (section) {
     case 'dashboard':
       return <DashboardPage />
@@ -173,8 +163,11 @@ export function SurveySectionPage() {
     case 'findings':
       return <FindingsPage />
     case 'processes':
+      return <ProcessesPage />
     case 'analytics':
+      return <AnalyticsPage />
     case 'report':
+      return <ReportPage />
     case 'settings':
       return <ComingSoonPage section={section} />
   }
