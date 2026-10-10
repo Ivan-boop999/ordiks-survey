@@ -15,6 +15,8 @@ import { errorResponse, handleError, validationErrorHook } from './http/errors'
 import { createReadinessProbe } from './http/readiness'
 import { createAuthSecurity, createFixedWindowRateLimit } from './http/security'
 import { createAuthModule, type AuthHttpEnv } from './modules/auth'
+import { createInvitesModule } from './modules/invites'
+import { createProjectsModule } from './modules/projects'
 import { createUploadsModule } from './modules/uploads'
 import { createUsersModule } from './modules/users'
 import { createRateLimitStores } from './rate-limit'
@@ -68,6 +70,8 @@ export function createApp({
     requireAuth: auth.requireAuth,
     storage: storage.storage,
   })
+  const projects = createProjectsModule({ db: prisma, requireAuth: auth.requireAuth })
+  const invites = createInvitesModule({ db: prisma, requireAuth: auth.requireAuth })
   const app = new OpenAPIHono<AuthHttpEnv>({
     defaultHook: validationErrorHook,
   })
@@ -148,6 +152,10 @@ export function createApp({
   app.route('/api/users', users.userRoutes)
   app.route('/api/admin', users.adminRoutes)
   app.route('/api/uploads', uploads.routes)
+  for (const routes of projects.routes) {
+    app.route('/api', routes)
+  }
+  app.route('/api', invites.routes)
 
   // Only the filesystem driver needs the backend to serve the URLs it signs. With an S3 driver
   // the browser uploads straight to the bucket and there is nothing to mount here.
