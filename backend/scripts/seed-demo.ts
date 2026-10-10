@@ -571,6 +571,645 @@ async function seedSurveyEntities(
   }
 }
 
+// ============================================================
+// Демо-данные волны B3: процессы, отчёт с визами, комментарии, аналитика,
+// свои реестры, шаблоны (перенос прототипа; даты — смещениями от сегодня)
+// ============================================================
+
+/** Процессы AS-IS/TO-BE из прототипа; mapTo: 'map:<индекс tobe>' | 'none' | ''. */
+const demoProcesses: Array<{
+  name: string
+  asis: Array<{ title: string; role: string; tools: string[]; mapTo?: string }>
+  tobe: Array<{ title: string; role: string; tools: string[]; effect?: string }>
+}> = [
+  {
+    name: 'Путь клиентского заказа',
+    asis: [
+      { title: 'Заказ принимает менеджер ОЗ', role: 'Менеджер продаж', tools: ['Excel', 'мессенджер'], mapTo: 'map:0' },
+      { title: 'Согласование возможности и срока с ПДО', role: 'Диспетчер', tools: ['телефон', 'Excel'], mapTo: 'map:1' },
+      { title: 'Договор и счёт', role: 'Бухгалтерия', tools: ['1С'], mapTo: 'map:2' },
+      { title: 'Позиции попадают в план месяца (Excel)', role: 'ПДО', tools: ['Excel'], mapTo: 'map:3' },
+      { title: 'Сменное задание на бумаге в цех', role: 'Начальник цеха', tools: ['бумага'], mapTo: 'map:4' },
+      { title: 'Выпуск, брак, простои — журналы смены', role: 'Мастер, операторы', tools: ['бумага', 'ручной перенос'], mapTo: 'map:5' },
+      { title: 'Паспорт качества и приёмка ОТК', role: 'Лаборатория, ОТК', tools: ['бумага', '1С'], mapTo: 'map:6' },
+      { title: 'Отгрузка: 1С + таблица логиста', role: 'Логист, бухгалтерия', tools: ['1С', 'Excel', 'ручной перенос'], mapTo: 'map:7' },
+    ],
+    tobe: [
+      { title: 'Заказ заводится в единой системе', role: 'Менеджер продаж', tools: ['система'], effect: 'Один источник правды по заказу, история изменений.' },
+      { title: 'Автоматическая проверка сроков и материалов', role: 'Система', tools: ['система'], effect: 'Согласование с ПДО за минуты, а не часы.' },
+      { title: 'Договор и счёт из системы, ЭДО', role: 'Бухгалтерия', tools: ['система', '1С'] },
+      { title: 'План производства в MES: версии и изменения в одном месте', role: 'ПДО', tools: ['система'], effect: 'Единая версия плана, видимость изменений всем цехам.' },
+      { title: 'Сменное задание на терминале поста', role: 'Начальник цеха', tools: ['система'], effect: 'Без бумаги, задание всегда актуально.' },
+      { title: 'Оперативный факт с постов: выпуск, брак, простой с причиной', role: 'Операторы', tools: ['система'], effect: 'Руководство видит картину смены в реальном времени.' },
+      { title: 'Контроль качества на линии, паспорт формируется автоматически', role: 'Лаборатория, ОТК', tools: ['система'], effect: 'Привязка паспорта к партии без ручного труда.' },
+      { title: 'Склад с адресацией и резервом, отгрузка из одной системы', role: 'Логист, бухгалтерия', tools: ['система', '1С'], effect: 'Нет двойного ввода, резерв виден продажам.' },
+    ],
+  },
+  {
+    name: 'Заявка на ремонт и ППР',
+    asis: [
+      { title: 'Заявка на ремонт — устно или в журнале у мастера', role: 'Мастер смены', tools: ['бумага', 'телефон'], mapTo: 'map:0' },
+      { title: 'ОГМ планирует ППР по календарю «раз в полгода»', role: 'ОГМ', tools: ['Excel'], mapTo: 'map:1' },
+      { title: 'Наработка и состояние оборудования — в голове у механика', role: 'Механик ОГМ', tools: ['ручной перенос'], mapTo: 'none' },
+      { title: 'Ремонт и отчёт о нём — бумажный наряд', role: 'ОГМ, механики', tools: ['бумага'], mapTo: 'map:3' },
+    ],
+    tobe: [
+      { title: 'Заявка на ремонт с поста в системе, с фото', role: 'Оператор/мастер', tools: ['система'], effect: 'Заявка не теряется, видна история по единице оборудования.' },
+      { title: 'Планирование ППР по фактической наработке', role: 'Система, ОГМ', tools: ['система'], effect: 'Обслуживание вовремя, без «раз в полгода вслепую».' },
+      { title: 'Паспорт единицы оборудования: наработка, ремонты, ресурс', role: 'Система', tools: ['система'], effect: 'Ресурс форм и узлов прогнозируем (связь с GAP по оснастке).' },
+      { title: 'Электронный наряд-заказ на ремонт с отметкой работ', role: 'Механики', tools: ['система', 'мобильное устройство'], effect: 'Трудоёмкость и простои по ремонтам измеримы.' },
+    ],
+  },
+]
+
+const demoReportSections: Array<{ title: string; body: string }> = [
+  {
+    title: '1. Общие сведения о предприятии',
+    body: '<p>Завод ЖБИ, г. Уфа. Три производственных цеха: цех плит, цех ВПИ №1, цех ВПИ №2. Основная номенклатура: плиты, вибропрессованные изделия. Численность и объёмы — уточняется по данным заказчика.</p>',
+  },
+  {
+    title: '2. AS-IS: продажи и планирование',
+    body: '<p>Заказ проходит путь от менеджера через согласование с ПДО до плана месяца. План существует в Excel, сменные задания — на бумаге. Единой версии плана нет (см. проблему несогласованных планов).</p>',
+  },
+  {
+    title: '3. AS-IS: производство и качество',
+    body: '<p>Факт смены фиксируется в журналах, сводится ПДО на следующий день. Простои и брак — в тетрадях от руки. Паспорта качества печатаются пакетом, привязка к партии ручная.</p>',
+  },
+  {
+    title: '4. TO-BE: целевая модель (черновик)',
+    body: '<p>Целевой контур: заказ → проверка материалов → сменное задание → оперативный факт → качество → склад → отгрузка. Модель будет уточнена по результатам оставшихся интервью.</p>',
+  },
+  { title: '5. Реестр рисков', body: '' },
+  { title: '6. Приложения: реестр проблем', body: '' },
+]
+
+/** Комментарии в 4 тредах от разных ролей; пара needsAnswer — SLA-вопросы без ответа. */
+const demoComments: Array<{
+  threadType: 'finding' | 'fact' | 'registry_entry'
+  findingTitle?: string
+  registryEntryNumber?: string
+  author: string
+  body: string
+  hoursAgo: number
+  needsAnswer?: boolean
+}> = [
+  { threadType: 'finding', findingTitle: 'Факт смены появляется на следующий день', author: 'rustem@demo.ordiks.ru', body: 'Подтверждаю. Хотелось бы видеть статус заказа в течение дня, а не утром следующего.', hoursAgo: 20 },
+  { threadType: 'finding', findingTitle: 'Факт смены появляется на следующий день', author: 'ivan@ordiks.ru', body: 'Принято. Этот разрыв будет первым в TO-BE: оперативный контур факта смены.', hoursAgo: 16 },
+  { threadType: 'finding', findingTitle: 'Нет связи планов с ППР', author: 'marat@demo.ordiks.ru', body: 'Мы решаем это планёрками. Но к концу месяца всегда сюрпризы — что предлагаете зафиксировать в целевой модели?', hoursAgo: 9, needsAnswer: true },
+  { threadType: 'fact', findingTitle: 'Форма плит после 400+ циклов', author: 'rustem@demo.ordiks.ru', body: 'Формы № 12–18 уже прошли ремонты. Уточню список у Марата.', hoursAgo: 26 },
+  { threadType: 'registry_entry', registryEntryNumber: 'Ф-102', author: 'marat@demo.ordiks.ru', body: 'Ф-102 дала трещину на борту. Остаток 4300 циклов не отработает — предлагаю осмотр раньше срока и перевод «в ремонте».', hoursAgo: 5, needsAnswer: true },
+  { threadType: 'registry_entry', registryEntryNumber: 'Ф-102', author: 'ivan@ordiks.ru', body: 'Согласно. После осмотра переведём статус на «В ремонте» — в отчёт пойдёт как подтверждение проблемы учёта ресурса оснастки.', hoursAgo: 3 },
+]
+
+const demoGaps: Array<{
+  req: string
+  kind: 'std' | 'dev' | 'manual'
+  status: 'open' | 'agreed' | 'rejected'
+  domain: string
+  findingTitle?: string
+  comment: string
+  day: number
+}> = [
+  { req: 'Единый план производства для всех цехов', kind: 'std', status: 'agreed', domain: 'Планирование: цех плит', findingTitle: 'План производства существует в 3 несвязанных местах', comment: 'Закрывается планированием MES, типовой функционал.', day: -2 },
+  { req: 'Оперативный факт смены в течение часа', kind: 'std', status: 'open', domain: 'Фактический выпуск', findingTitle: 'Факт смены появляется на следующий день', comment: '', day: -2 },
+  { req: 'Прогноз ресурса форм по циклам', kind: 'dev', status: 'open', domain: 'Оснастка: формы и матрицы', findingTitle: 'Ресурс оснастки не учитывается', comment: 'В типовых MES учёта оснастки нет — нужна доработка.', day: -1 },
+  { req: 'ППР по фактической наработке', kind: 'dev', status: 'open', domain: 'ТОиР и ППР', findingTitle: 'ППР по календарю, а не по наработке', comment: '', day: -1 },
+  { req: 'Ежедневные планёрки диспетчеров', kind: 'manual', status: 'agreed', domain: 'Диспетчеризация', findingTitle: 'Нет связи планов с ППР', comment: 'Организационное решение, автоматизация не требуется.', day: -3 },
+]
+
+const demoRisks: Array<{
+  title: string
+  prob: number
+  imp: number
+  owner: string
+  domain: string
+  mitigation: string
+  day: number
+}> = [
+  { title: 'Сопротивление мастеров вводу факта в систему', prob: 4, imp: 4, owner: 'rustem@demo.ordiks.ru', domain: 'Фактический выпуск', mitigation: 'Раннее вовлечение мастеров в пилот, обучение на смене, максимально простой интерфейс поста.', day: -3 },
+  { title: 'Качество данных при переносе из Excel и бумаги', prob: 4, imp: 3, owner: 'anna@ordiks.ru', domain: 'Диспетчеризация', mitigation: 'Правила очистки, контрольные суммы, двойной ввод на период перехода.', day: -3 },
+  { title: 'Внезапный отказ формы — остановка цеха плит', prob: 3, imp: 5, owner: 'marat@demo.ordiks.ru', domain: 'Оснастка: формы и матрицы', mitigation: 'Немедленно вести учёт циклов вне ПО; приоритет закупки критичных форм.', day: -2 },
+  { title: 'Срыв сроков предоставления данных заказчиком', prob: 4, imp: 3, owner: 'ivan@ordiks.ru', domain: 'Отгрузка', mitigation: 'Эскалация просроченных запросов директору (уже видны на обзоре).', day: -1 },
+  { title: '1С без доработок не потянет оперативный контур', prob: 3, imp: 4, owner: 'olga@demo.ordiks.ru', domain: 'ИТ-системы', mitigation: 'Развести контуры: 1С — учёт, MES — операции; синхронизация пакетами.', day: -1 },
+]
+
+const demoRequirements: Array<{
+  title: string
+  source: string
+  moscow: 'must' | 'should' | 'could' | 'wont'
+  domain: string
+  findingTitle?: string
+  day: number
+}> = [
+  { title: 'Статус заказа виден руководству в реальном времени (от оплаты до отгрузки)', source: 'интервью', moscow: 'must', domain: 'Диспетчеризация', findingTitle: 'Факт смены появляется на следующий день', day: -1 },
+  { title: 'Единая версия плана производства с историей изменений', source: 'интервью', moscow: 'must', domain: 'Планирование: цех плит', findingTitle: 'План производства существует в 3 несвязанных местах', day: -1 },
+  { title: 'Факт смены вводится на посту, а не переписывается диспетчером утром', source: 'наблюдение', moscow: 'must', domain: 'Фактический выпуск', findingTitle: 'Факт смены появляется на следующий день', day: -1 },
+  { title: 'Учёт циклов и ресурса форм с прогнозом замены', source: 'документ', moscow: 'should', domain: 'Оснастка: формы и матрицы', findingTitle: 'Ресурс оснастки не учитывается', day: 0 },
+  { title: 'Графики ППР строятся по фактической наработке', source: 'интервью', moscow: 'should', domain: 'ТОиР и ППР', findingTitle: 'ППР по календарю, а не по наработке', day: 0 },
+  { title: 'Мобильный складской терминал с адресацией и резервом', source: 'интервью', moscow: 'could', domain: 'Склад готовой продукции', day: 0 },
+  { title: 'Интеграция с банком для авторазнесения оплат', source: 'интервью', moscow: 'wont', domain: 'Продажи и договоры', day: 0 },
+]
+
+const demoDecisions: Array<{
+  title: string
+  rationale: string
+  participants: string
+  status: 'active' | 'superseded'
+  day: number
+}> = [
+  { title: 'Оперативный производственный контур выносим в MES; 1С остаётся учётной системой', rationale: 'Опыт смежных проектов: попытка вести оперативку в 1С перегружает бухгалтерский контур.', participants: 'Иван, Рустем, Ольга', status: 'active', day: -2 },
+  { title: 'Начать пилот с цеха плит, не с всех трёх цехов сразу', rationale: 'Цех плит — самые явные боли и адекватный начальник цеха.', participants: 'Иван, Анна, Марат', status: 'active', day: -2 },
+  { title: 'Первоначально рассматривали доработку существующего Excel-плана', rationale: 'Отвергнуто: тремя редакторами файл уже конфликтует, рост нагрузки убьёт идею.', participants: 'Иван, Ольга', status: 'superseded', day: -4 },
+]
+
+const demoCommunications: Array<{
+  title: string
+  kind: 'meeting' | 'call' | 'email'
+  participants: string
+  summary: string
+  domain?: string
+  day: number
+}> = [
+  { title: 'Стартовая планёрка', kind: 'meeting', participants: 'Иван, Рустем, Марат, Ольга', summary: 'Согласован план выезда, список респондентов, порядок предоставления данных. Выдать коды доступа к порталу; реестр оборудования — до конца недели.', day: -6 },
+  { title: 'Просроченные запросы: реестры оборудования и форм', kind: 'call', participants: 'Иван, Рустем', summary: 'Рустем лично напомнит Марату и Ольге.', domain: 'ТОиР и ППР', day: -3 },
+  { title: 'Обход цеха плит', kind: 'meeting', participants: 'Анна, Марат, мастер смены', summary: 'Путь сменного задания от ПДО до журнала факта. Сфотографировать журнал и доску загрузки для фактов.', domain: 'Планирование: цех плит', day: -1 },
+  { title: 'Схема сети и список серверов', kind: 'email', participants: 'Иван, Ольга', summary: 'Переписка по схеме сети и списку серверов для оценки инфраструктуры. Ольга пришлёт схему до пятницы.', domain: 'Инфраструктура', day: 0 },
+]
+
+const demoQuickWins: Array<{
+  title: string
+  effect: string
+  effort: string
+  status: 'suggested' | 'accepted' | 'done'
+  domain?: string
+  day: number
+}> = [
+  { title: 'Ввести учёт циклов форм в простой таблице у мастера', effect: 'Прогноз замены форм вместо внезапных отказов; данные пригодятся для системы', effort: 'низкий', status: 'suggested', domain: 'Оснастка: формы и матрицы', day: -1 },
+  { title: 'Единый шаблон журнала смены во всех цехах', effect: 'Убирает расхождения форматов, упрощает сведение', effort: 'низкий', status: 'accepted', domain: 'Фактический выпуск', day: -1 },
+  { title: 'Регламент эскалации просроченных запросов данных', effect: 'Сокращение простоев обследования из-за ожидания данных', effort: 'низкий', status: 'accepted', day: -1 },
+  { title: 'Адресные ярлыки на площадки склада ГП', effect: 'Поиск паллеты быстрее, меньше потерь при инвентаризации', effort: 'средний', status: 'suggested', domain: 'Склад готовой продукции', day: 0 },
+]
+
+const demoBaselines: Array<{
+  metric: string
+  value: string
+  unit: string
+  source: string
+  comment: string
+  day: number
+}> = [
+  { metric: 'Срок выполнения заказа', value: '21', unit: 'календарных дней (медиана)', source: 'интервью с директором', comment: 'Целевое значение после внедрения — 14 дней.', day: -1 },
+  { metric: 'Время сводки факта смены', value: '90', unit: 'минут утром следующего дня', source: 'интервью, ПДО', comment: '', day: -1 },
+  { metric: 'Точность выполнения плана месяца', value: '60', unit: '%', source: 'интервью, начальники цехов', comment: 'Оценка по памяти, данных нет — тема отдельного запроса.', day: -1 },
+  { metric: 'Доля брака по геометрии', value: '2.3', unit: '% от выпуска', source: 'журналы ОТК', comment: '', day: -2 },
+  { metric: 'Время поиска паллеты на складе ГП', value: '20', unit: 'минут', source: 'наблюдение, склад', comment: 'Оценка кладовщика.', day: 0 },
+]
+
+/// Свой реестр «Оснастка»: 6 полей (включая формулу остатка) + 3 статуса + 6 записей.
+const demoRegistryFields: Array<{
+  key: string
+  name: string
+  type: 'text' | 'number' | 'date' | 'select' | 'formula'
+  options?: string[]
+  formula?: { op: '+' | '-' | '*'; a: { type: 'field' | 'const'; key?: string; value?: number }; b: { type: 'field' | 'const'; key?: string; value?: number } }
+}> = [
+  { key: 'number', name: 'Номер', type: 'text' },
+  { key: 'type', name: 'Тип', type: 'select', options: ['Форма', 'Матрица', 'Палитра', 'Бортоснастка'] },
+  { key: 'total', name: 'Циклов всего', type: 'number' },
+  { key: 'worked', name: 'Циклов наработки', type: 'number' },
+  { key: 'left', name: 'Циклов остаток', type: 'formula', formula: { op: '-', a: { type: 'field', key: 'total' }, b: { type: 'field', key: 'worked' } } },
+  { key: 'inspection', name: 'Дата осмотра', type: 'date' },
+]
+
+const demoRegistryStatuses = [
+  { name: 'В работе', color: 'blue' },
+  { name: 'В ремонте', color: 'amber' },
+  { name: 'Списана', color: 'gray' },
+]
+
+const demoRegistryEntries: Array<{
+  number: string
+  type: string
+  total: number
+  worked: number
+  inspection: number
+  status: string
+}> = [
+  { number: 'Ф-102', type: 'Форма', total: 12000, worked: 7700, inspection: -9, status: 'В работе' },
+  { number: 'Ф-118', type: 'Форма', total: 15000, worked: 900, inspection: -4, status: 'В работе' },
+  { number: 'М-31', type: 'Матрица', total: 8000, worked: 7190, inspection: -16, status: 'В ремонте' },
+  { number: 'М-44', type: 'Матрица', total: 8000, worked: 50, inspection: -2, status: 'В работе' },
+  { number: 'П-07', type: 'Палитра', total: 4000, worked: 0, inspection: -1, status: 'В работе' },
+  { number: 'Ф-087', type: 'Форма', total: 12000, worked: 12000, inspection: -30, status: 'Списана' },
+]
+
+/** Шаблоны библиотеки методик: два стандартных из прототипа + экспресс-пищевой. */
+const demoTemplates: Array<{
+  name: string
+  description: string
+  weeks: number
+  stageNames: string[]
+  groups: string[]
+  domains: Array<{ groupIndex: number; name: string; checklist: string[] }>
+  reportSections: string[]
+}> = [
+  {
+    name: 'Полное предпроектное ЖБИ',
+    description: 'Комплексное обследование завода ЖБИ: продажи, планирование по цехам, качество, склад, экономика, ТОиР, оснастка, ИТ и АСУ ТП.',
+    weeks: 5,
+    stageNames: ['Подготовка', 'Выезд и сбор фактов', 'Анализ и моделирование', 'Согласование и защита'],
+    groups: demoDomainTree.map((group) => group.group),
+    domains: demoDomainTree.flatMap((group, groupIndex) =>
+      group.domains.map((domain) => ({ groupIndex, name: domain.name, checklist: domain.checklist })),
+    ),
+    reportSections: ['1. Общие сведения о предприятии', '2. AS-IS: продажи и планирование', '3. AS-IS: производство и качество', '4. AS-IS: склад, отгрузка, документы', '5. Экономика и себестоимость', '6. ТОиР и оснастка', '7. ИТ-ландшафт и АСУ ТП', '8. Выводы и следующие шаги'],
+  },
+  {
+    name: 'Технический аудит АСУТП',
+    description: 'Три блока: аудит оборудования и источников данных → варианты решения → итоговая концепция передачи данных в MES.',
+    weeks: 12,
+    stageNames: ['Блок 1. Аудит', 'Блок 2. Варианты решения', 'Блок 3. Итоговая концепция'],
+    groups: ['Аудит', 'Решение', 'ИТ-контур'],
+    domains: [
+      { groupIndex: 0, name: 'Оборудование и каналы связи', checklist: ['Перечень производственных линий', 'Интерфейсы контроллеров', 'Существующие кабельные трассы'] },
+      { groupIndex: 0, name: 'Источники технологических данных', checklist: ['Температуры, давления, счётчики', 'Периодичность опроса', 'Достоверность данных'] },
+      { groupIndex: 1, name: 'Варианты съёма данных', checklist: ['Прямой съём с контроллеров', 'Дополнительные датчики', 'Ручной ввод с постов'] },
+      { groupIndex: 1, name: 'Передача в MES', checklist: ['Транспорт и протоколы', 'Буферизация при сбоях', 'Границы ответственности'] },
+      { groupIndex: 2, name: 'Сети и серверы', checklist: ['Сегментация сети АСУ ТП', 'Размещение оборудования сбора', 'Резервирование каналов'] },
+    ],
+    reportSections: ['1. Карта источников данных', '2. Доступные интерфейсы и протоколы', '3. Ограничения и узкие места', '4. Сравнение сценариев решения', '5. Рекомендуемая архитектура', '6. Требования к следующей фазе'],
+  },
+  {
+    name: 'Пищевое производство, экспресс',
+    description: 'Короткая диагностика пищевого производства (2–3 недели): приёмка, рецептуры, линии, ХАССП и прослеживаемость, FEFO-склад.',
+    weeks: 3,
+    stageNames: ['Подготовка', 'Экспресс-обследование', 'Отчёт и рекомендации'],
+    groups: ['Производство', 'Качество и лаборатория', 'Склад и логистика'],
+    domains: [
+      { groupIndex: 0, name: 'Приёмка сырья', checklist: ['Входной контроль поставщиков', 'Карантинные партии', 'Температурные логи приёмки'] },
+      { groupIndex: 0, name: 'Рецептуры и навеска', checklist: ['Ведение рецептур', 'Точность навески', 'Замены ингредиентов'] },
+      { groupIndex: 0, name: 'Линии розлива/фасовки', checklist: ['Настройки линий', 'Скорости и простои', 'Пересменки и мойка (CIP)'] },
+      { groupIndex: 1, name: 'ХАССП и прослеживаемость', checklist: ['Критические контрольные точки', 'Партии и лот-коды', 'Отбор проб и испытания'] },
+      { groupIndex: 2, name: 'Склад готовой продукции', checklist: ['Партионный учёт', 'Сроки годности (FEFO)', 'Отгрузки и документы'] },
+    ],
+    reportSections: ['1. Сводка наблюдений', '2. ХАССП и прослеживаемость', '3. Быстрые улучшения', '4. Рекомендации по автоматизации'],
+  },
+]
+
+function addHours(hours: number) {
+  return new Date(Date.now() + hours * 3600 * 1000)
+}
+
+function isoDayOffset(days: number) {
+  return addDays(days).toISOString().slice(0, 10)
+}
+
+/**
+ * Сущности B3 сеются только в пустые семейства (как B2): свежий проект получает всё сразу,
+ * проект времён B2 досеивается один раз, повторные запуски не дублируют.
+ */
+async function seedB3Entities(
+  db: DbClient,
+  project: { id: string },
+  users: Map<string, { id: string; email: string }>,
+) {
+  const domains = await db.domain.findMany({ where: { projectId: project.id }, select: { id: true, name: true } })
+  const domainId = (name: string) => domains.find((domain) => domain.name === name)?.id ?? null
+  const userId = (email: string) => users.get(email)?.id
+  const findings = await db.finding.findMany({ where: { projectId: project.id }, select: { id: true, title: true } })
+  const findingId = (title: string) => findings.find((finding) => finding.title === title)?.id ?? null
+  const facts = await db.fact.findMany({ where: { projectId: project.id }, select: { id: true, title: true } })
+  const factId = (title: string) => facts.find((fact) => fact.title === title)?.id ?? null
+
+  // --- Процессы AS-IS/TO-BE: шаги обеих сторон + перевязка mapTo (схемы не сеем). ---
+  const processCount = await db.process.count({ where: { projectId: project.id } })
+  if (processCount === 0) {
+    for (const demo of demoProcesses) {
+      const created = await db.process.create({ data: { projectId: project.id, name: demo.name } })
+      const tobeIds: string[] = []
+      for (const [index, step] of demo.tobe.entries()) {
+        const row = await db.processStep.create({
+          data: {
+            processId: created.id,
+            side: 'tobe',
+            title: step.title,
+            actorRole: step.role,
+            tools: step.tools,
+            effect: step.effect ?? '',
+            sortOrder: index,
+          },
+        })
+        tobeIds.push(row.id)
+      }
+      for (const [index, step] of demo.asis.entries()) {
+        const mapTo = step.mapTo ?? ''
+        await db.processStep.create({
+          data: {
+            processId: created.id,
+            side: 'asis',
+            title: step.title,
+            actorRole: step.role,
+            tools: step.tools,
+            // 'none' → disappears=true + mapToStepId=null; '' → оба пусты («не определено»).
+            mapToStepId: mapTo.startsWith('map:') ? tobeIds[Number(mapTo.slice(4))] ?? null : null,
+            disappears: mapTo === 'none',
+            sortOrder: index,
+          },
+        })
+      }
+    }
+  }
+
+  // --- Отчёт: 6 разделов + 2 визы (rustem approved, marat changes). ---
+  const sectionCount = await db.reportSection.count({ where: { projectId: project.id } })
+  if (sectionCount === 0) {
+    for (const [index, section] of demoReportSections.entries()) {
+      await db.reportSection.create({
+        data: { projectId: project.id, title: section.title, body: section.body, sortOrder: index },
+      })
+    }
+    const sections = await db.reportSection.findMany({ where: { projectId: project.id }, orderBy: { sortOrder: 'asc' } })
+    if (sections[0]) {
+      await db.sectionApproval.create({
+        data: {
+          sectionId: sections[0].id,
+          userId: userId('rustem@demo.ordiks.ru')!,
+          decision: 'approved',
+          comment: 'Состав согласован.',
+        },
+      })
+    }
+    if (sections[3]) {
+      await db.sectionApproval.create({
+        data: {
+          sectionId: sections[3].id,
+          userId: userId('marat@demo.ordiks.ru')!,
+          decision: 'changes',
+          comment: 'Целевую модель по цеху ВПИ нужно дополнить учётом полуфабрикатов между операциями.',
+        },
+      })
+    }
+  }
+
+  // --- Комментарии в 4 тредах (находка ×2, факт, запись реестра); пара needsAnswer. ---
+  const commentCount = await db.comment.count({ where: { projectId: project.id } })
+  let firstRegistryEntryId: string | null = null
+  if (commentCount === 0) {
+    for (const comment of demoComments) {
+      const threadId =
+        comment.threadType === 'finding'
+          ? findingId(comment.findingTitle ?? '')
+          : comment.threadType === 'fact'
+            ? factId(comment.findingTitle ?? '')
+            : firstRegistryEntryId
+      if (!threadId) continue
+      await db.comment.create({
+        data: {
+          projectId: project.id,
+          threadType: comment.threadType,
+          threadId,
+          authorId: userId(comment.author)!,
+          body: comment.body,
+          needsAnswer: comment.needsAnswer ?? false,
+          createdAt: addHours(-comment.hoursAgo),
+        },
+      })
+    }
+  }
+
+  // --- Аналитические реестры. ---
+  if ((await db.gap.count({ where: { projectId: project.id } })) === 0) {
+    for (const gap of demoGaps) {
+      await db.gap.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(gap.domain),
+          findingId: findingId(gap.findingTitle ?? '') ?? null,
+          requirement: gap.req,
+          kind: gap.kind,
+          status: gap.status,
+          comment: gap.comment,
+          createdAt: addDays(gap.day),
+        },
+      })
+    }
+  }
+
+  if ((await db.risk.count({ where: { projectId: project.id } })) === 0) {
+    for (const risk of demoRisks) {
+      await db.risk.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(risk.domain),
+          ownerId: userId(risk.owner) ?? null,
+          title: risk.title,
+          probability: risk.prob,
+          impact: risk.imp,
+          status: 'open',
+          mitigation: risk.mitigation,
+          createdAt: addDays(risk.day),
+        },
+      })
+    }
+  }
+
+  if ((await db.requirement.count({ where: { projectId: project.id } })) === 0) {
+    for (const requirement of demoRequirements) {
+      await db.requirement.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(requirement.domain),
+          findingId: findingId(requirement.findingTitle ?? '') ?? null,
+          title: requirement.title,
+          source: requirement.source,
+          moscow: requirement.moscow,
+          createdAt: addDays(requirement.day),
+        },
+      })
+    }
+  }
+
+  if ((await db.decisionLog.count({ where: { projectId: project.id } })) === 0) {
+    for (const decision of demoDecisions) {
+      await db.decisionLog.create({
+        data: {
+          projectId: project.id,
+          title: decision.title,
+          rationale: decision.rationale,
+          participants: decision.participants,
+          status: decision.status,
+          decidedAt: addDays(decision.day),
+          createdAt: addDays(decision.day),
+        },
+      })
+    }
+  }
+
+  if ((await db.communication.count({ where: { projectId: project.id } })) === 0) {
+    for (const communication of demoCommunications) {
+      await db.communication.create({
+        data: {
+          projectId: project.id,
+          title: communication.title,
+          kind: communication.kind,
+          participants: communication.participants,
+          summary: communication.summary,
+          heldAt: addDays(communication.day),
+          createdAt: addDays(communication.day),
+        },
+      })
+    }
+  }
+
+  if ((await db.quickWin.count({ where: { projectId: project.id } })) === 0) {
+    for (const quickWin of demoQuickWins) {
+      await db.quickWin.create({
+        data: {
+          projectId: project.id,
+          domainId: domainId(quickWin.domain ?? '') ?? null,
+          title: quickWin.title,
+          effect: quickWin.effect,
+          effort: quickWin.effort,
+          status: quickWin.status,
+          createdAt: addDays(quickWin.day),
+        },
+      })
+    }
+  }
+
+  if ((await db.baseline.count({ where: { projectId: project.id } })) === 0) {
+    for (const baseline of demoBaselines) {
+      await db.baseline.create({
+        data: {
+          projectId: project.id,
+          metric: baseline.metric,
+          value: baseline.value,
+          unit: baseline.unit,
+          comment: baseline.comment,
+          source: baseline.source,
+          createdAt: addDays(baseline.day),
+        },
+      })
+    }
+  }
+
+  // --- Свой реестр «Оснастка» (поля со формулой, статусы, 6 записей) + второй пустой. ---
+  const registryCount = await db.customRegistry.count({ where: { projectId: project.id } })
+  if (registryCount === 0) {
+    const registry = await db.customRegistry.create({
+      data: {
+        projectId: project.id,
+        name: 'Оснастка: формы и матрицы',
+        description: 'Учёт ресурса оснастки: сколько циклов отработала форма и когда следующий осмотр. Демонстрация конструктора реестров: статусы, списки и вычисляемое поле-формула.',
+      },
+    })
+    const statusIds = new Map<string, string>()
+    for (const [index, status] of demoRegistryStatuses.entries()) {
+      const created = await db.registryStatus.create({
+        data: { registryId: registry.id, name: status.name, color: status.color, sortOrder: index },
+      })
+      statusIds.set(status.name, created.id)
+    }
+    for (const [index, field] of demoRegistryFields.entries()) {
+      await db.customField.create({
+        data: {
+          registryId: registry.id,
+          key: field.key,
+          name: field.name,
+          type: field.type,
+          options: field.options ?? [],
+          formula: (field.formula ?? undefined) as never,
+          sortOrder: index,
+        },
+      })
+    }
+    for (const entry of demoRegistryEntries) {
+      const created = await db.registryEntry.create({
+        data: {
+          registryId: registry.id,
+          statusId: statusIds.get(entry.status) ?? null,
+          values: {
+            number: entry.number,
+            type: entry.type,
+            total: entry.total,
+            worked: entry.worked,
+            inspection: isoDayOffset(entry.inspection),
+          } as never,
+        },
+      })
+      if (entry.number === 'Ф-102') firstRegistryEntryId = created.id
+    }
+    await db.customRegistry.create({
+      data: {
+        projectId: project.id,
+        name: 'Простои оборудования',
+        description: 'Пустой реестр-заготовка: заполните поля под специфику предприятия (дата, цех, причина, длительность).',
+      },
+    })
+  } else if (commentCount === 0) {
+    // Реестр существовал (досеивание B2-проекта): тред записи берём из имеющихся записей.
+    const entry = await db.registryEntry.findFirst({
+      where: { registry: { projectId: project.id }, values: { path: ['number'], equals: 'Ф-102' } },
+    })
+    firstRegistryEntryId = entry?.id ?? null
+  }
+
+  // Комментарии на запись реестра могли не сеяться (тред появился выше) — досеиваем после.
+  if (commentCount === 0 && firstRegistryEntryId) {
+    for (const comment of demoComments.filter((item) => item.threadType === 'registry_entry')) {
+      await db.comment.create({
+        data: {
+          projectId: project.id,
+          threadType: 'registry_entry',
+          threadId: firstRegistryEntryId,
+          authorId: userId(comment.author)!,
+          body: comment.body,
+          needsAnswer: comment.needsAnswer ?? false,
+          createdAt: addHours(-comment.hoursAgo),
+        },
+      })
+    }
+  }
+
+  // --- Шаблоны библиотеки методик: по одному на имя, идемпотентно. ---
+  let seededTemplates = 0
+  for (const template of demoTemplates) {
+    const existing = await db.projectTemplate.findFirst({ where: { name: template.name } })
+    if (existing) continue
+    seededTemplates += 1
+    await db.projectTemplate.create({
+      data: {
+        name: template.name,
+        description: template.description,
+        payload: {
+          stageNames: template.stageNames,
+          weeks: template.weeks,
+          groups: template.groups,
+          domains: template.domains,
+          reportSections: template.reportSections,
+          guides: [],
+          dictionaries: {
+            findingCategories: demoSettings.findingCategories,
+            findingPriorities: demoSettings.findingPriorities,
+            findingStatuses: demoSettings.findingStatuses,
+            factTypes: demoSettings.factTypes,
+            passportFields: demoPassportFields,
+          },
+          registries: [],
+          fromProject: null,
+        } as never,
+      },
+    })
+  }
+
+  return {
+    processes: processCount > 0 ? 0 : demoProcesses.length,
+    sections: sectionCount > 0 ? 0 : demoReportSections.length,
+    comments: commentCount > 0 ? 0 : demoComments.length,
+    templates: seededTemplates,
+  }
+}
+
 function domainStatus(done: number | undefined, checklistLength: number): 'not_started' | 'in_progress' | 'closed' {
   if (done === undefined || done === 0) return 'not_started'
   if (done >= checklistLength) return 'closed'
@@ -737,7 +1376,11 @@ async function seedDemoData(db: DbClient, password: string, env: Record<string, 
   // Сущности волны B2: гайды, интервью, факты, запросы, находки — только в пустые семейства.
   const seeded = await seedSurveyEntities(db, project, users, env)
 
-  return { project, createdProject, seeded, users: [...users.values()] }
+  // Сущности волны B3: процессы, отчёт с визами, комментарии, аналитика, свои реестры,
+  // шаблоны библиотеки — тот же принцип пустых семейств.
+  const seededB3 = await seedB3Entities(db, project, users)
+
+  return { project, createdProject, seeded, seededB3, users: [...users.values()] }
 }
 
 const env = Bun.env
@@ -773,6 +1416,14 @@ try {
     seededFamilies.length > 0
       ? `Seeded survey entities into empty families: ${seededFamilies.join(', ')}.`
       : 'Survey entities already present; nothing re-seeded.',
+  )
+  const seededB3Families = Object.entries(result.seededB3)
+    .filter(([, count]) => count > 0)
+    .map(([family, count]) => `${count} ${family}`)
+  console.log(
+    seededB3Families.length > 0
+      ? `Seeded B3 entities: ${seededB3Families.join(', ')}.`
+      : 'B3 entities already present; nothing re-seeded.',
   )
   console.log(`Demo invite ${DEMO_INVITE_CODE} is available for the client team (client_lead).`)
 } finally {
