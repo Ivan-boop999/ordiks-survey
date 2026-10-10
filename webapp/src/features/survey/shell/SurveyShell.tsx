@@ -1,4 +1,4 @@
-import { BoxesIcon, Logout01Icon, MoreIcon, MoreVerticalCircle01Icon, Notification03Icon, UserCircle02Icon } from '@hugeicons/core-free-icons'
+import { BoxesIcon, Logout01Icon, MoreIcon, MoreVerticalCircle01Icon, UserCircle02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import type { UserDto } from '@ordiks-survey/contracts'
@@ -7,7 +7,6 @@ import { useState, type ComponentPropsWithoutRef, type PropsWithChildren } from 
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +50,7 @@ import {
   type SurveySection,
   type SurveyViewRole,
 } from '../model'
+import { NotificationsBell } from './NotificationsBell'
 
 /** Ссылка навигации опроса: закрывает мобильный сайдбар после клика. */
 export function SurveyLink({
@@ -82,8 +82,8 @@ function getSidebarDefaultOpen() {
 
 /**
  * Оболочка приложения обследования: сайдбар с разделами проекта (ПК), шапка с переключателем
- * проекта и колокольчиком (заглушка до волны уведомлений), нижняя навигация из 5 главных
- * разделов + «Ещё» (мобильные, как в прототипе).
+ * проекта и колокольчиком уведомлений, нижняя навигация из 5 главных разделов + «Ещё»
+ * (мобильные, как в прототипе).
  */
 export function SurveyShell({
   children,
@@ -259,17 +259,7 @@ export function SurveyShell({
                   </SelectContent>
                 </Select>
               ) : null}
-              <Button
-                aria-label="Уведомления"
-                className="relative"
-                data-testid="survey-bell"
-                onClick={() => undefined}
-                size="icon-sm"
-                title="Уведомления — наполнение в следующей волне"
-                variant="ghost"
-              >
-                <HugeiconsIcon icon={Notification03Icon} strokeWidth={2} />
-              </Button>
+              <NotificationsBell />
             </div>
           </div>
         </header>
