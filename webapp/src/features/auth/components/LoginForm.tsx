@@ -9,6 +9,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { ApiRequestError } from '@/platform/api'
 import { useAuth } from '../use-auth'
+import { DemoAccessBlock } from './DemoAccessBlock'
 import { FormAlert } from './form-errors'
 import type { FieldErrors } from './form-model'
 import { clearFieldError, errorId, hasErrors, toValidationErrors } from './form-validation'
@@ -144,10 +145,25 @@ export function LoginForm({ returnTo }: { returnTo?: string }) {
           />
         </Field>
 
+        {import.meta.env?.VITE_DEMO_HINTS === '1' ? (
+          <DemoAccessBlock
+            onPick={(demo) => {
+              form.setFieldValue('email', demo.email)
+              form.setFieldValue('password', demo.password)
+              setFieldErrors({})
+              setFormError(null)
+            }}
+          />
+        ) : null}
+
         <FieldDescription className="text-center">
           Don&apos;t have an account?{' '}
           <Link data-testid="signup-link" search={{ returnTo }} to="/signup">
             Sign up
+          </Link>
+          {' · '}
+          <Link data-testid="invite-link" search={{ code: undefined }} to="/invite">
+            Есть код приглашения?
           </Link>
         </FieldDescription>
       </FieldGroup>

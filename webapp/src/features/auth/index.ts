@@ -1,6 +1,7 @@
 export { AuthApi } from './api'
 export { bootstrapAuthSession } from './bootstrap'
 export { AuthPageShell } from './components/AuthPageShell'
+export { DemoAccessBlock } from './components/DemoAccessBlock'
 export { ForgotPasswordForm } from './components/ForgotPasswordForm'
 export { LoginForm } from './components/LoginForm'
 export { RegisterForm } from './components/RegisterForm'
