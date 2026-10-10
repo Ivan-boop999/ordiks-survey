@@ -63,7 +63,9 @@ export function createPrismaReportRepository(db: DbClient): ReportRepository {
       const rows = await db.reportSection.findMany({
         where: { projectId },
         orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-        include: { approvals: { orderBy: [{ updatedAt: 'desc' }, { userId: 'asc' }] } },
+        include: {
+          approvals: { orderBy: [{ updatedAt: 'desc' }, { userId: 'asc' }], include: approvalInclude.include },
+        },
       })
       return Promise.all(
         rows.map((row) =>
@@ -75,7 +77,9 @@ export function createPrismaReportRepository(db: DbClient): ReportRepository {
     async findSectionById(sectionId) {
       const row = await db.reportSection.findUnique({
         where: { id: sectionId },
-        include: { approvals: { orderBy: [{ updatedAt: 'desc' }, { userId: 'asc' }] } },
+        include: {
+          approvals: { orderBy: [{ updatedAt: 'desc' }, { userId: 'asc' }], include: approvalInclude.include },
+        },
       })
       if (!row) return null
       return sectionWithApprovals(row, row.approvals as unknown as ApprovalRow[])

@@ -52,8 +52,7 @@ export function normalizeImportCell(field: ImportField, raw: string): CellParseR
     let iso = ''
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) iso = value
     else if (/^\d{2}\.\d{2}\.\d{4}$/.test(value)) iso = `${value.slice(6)}-${value.slice(3, 5)}-${value.slice(0, 2)}`
-    const date = iso === '' ? NaN : new Date(`${iso}T00:00:00.000Z`).getTime()
-    if (iso === '' || Number.isNaN(date) || Number(iso.slice(0, 4)) < 1900) {
+    if (iso === '' || !isRealCalendarDate(iso) || Number(iso.slice(0, 4)) < 1900) {
       return { ok: false, error: `«${value}» — не дата` }
     }
     return { ok: true, value: iso }
@@ -64,6 +63,16 @@ export function normalizeImportCell(field: ImportField, raw: string): CellParseR
     return { ok: true, value: option }
   }
   return { ok: true, value }
+}
+
+/// Настоящая календарная проверка: JS Date скатывает 31.02 в 3 марта, надо ловить явно.
+function isRealCalendarDate(iso: string): boolean {
+  const year = Number(iso.slice(0, 4))
+  const month = Number(iso.slice(5, 7))
+  const day = Number(iso.slice(8, 10))
+  if (month < 1 || month > 12 || day < 1) return false
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return day <= daysInMonth
 }
 
 /** Статус по названию (без учёта регистра); пустая строка — «не задан». */
