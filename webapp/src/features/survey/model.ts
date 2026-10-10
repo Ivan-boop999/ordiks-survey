@@ -366,3 +366,50 @@ export const PRIORITY_COLORS: Record<string, ChipColor> = {
   Средний: 'blue',
   Низкий: 'gray',
 }
+
+// ============================================================
+// Процессы, аналитика, отчёт — словари и цвета
+// ============================================================
+
+export const PROCESS_SIDE_LABELS: Record<'asis' | 'tobe', string> = {
+  asis: 'AS-IS',
+  tobe: 'TO-BE',
+}
+
+export const RISK_STATUS_META: Record<'open' | 'mitigated' | 'closed', { label: string; color: ChipColor }> = {
+  open: { label: 'Открыт', color: 'red' },
+  mitigated: { label: 'Митигирован', color: 'amber' },
+  closed: { label: 'Закрыт', color: 'green' },
+}
+
+/** Зона критичности риска (вероятность × влияние) для цвета heat-ячейки. */
+export function riskCriticalityColor(criticality: number): ChipColor {
+  if (criticality >= 15) return 'red'
+  if (criticality >= 8) return 'amber'
+  if (criticality >= 4) return 'blue'
+  return 'green'
+}
+
+export const GAP_KIND_META: Record<'std' | 'dev' | 'manual', { label: string; color: ChipColor }> = {
+  std: { label: 'Стандарт', color: 'blue' },
+  dev: { label: 'Отклонение', color: 'amber' },
+  manual: { label: 'Ручной', color: 'purple' },
+}
+
+export const GAP_STATUS_META: Record<'open' | 'agreed' | 'rejected', { label: string; color: ChipColor }> = {
+  open: { label: 'Открыт', color: 'amber' },
+  agreed: { label: 'Согласован', color: 'green' },
+  rejected: { label: 'Отклонён', color: 'gray' },
+}
+
+export const MOSCOW_META: Record<'must' | 'should' | 'could' | 'wont', { label: string; color: ChipColor }> = {
+  must: { label: 'Must', color: 'red' },
+  should: { label: 'Should', color: 'amber' },
+  could: { label: 'Could', color: 'blue' },
+  wont: { label: "Won't", color: 'gray' },
+}
+
+export const REPORT_APPROVAL_META: Record<'approved' | 'changes', { label: string; color: ChipColor }> = {
+  approved: { label: 'Согласовано', color: 'green' },
+  changes: { label: 'Замечания', color: 'amber' },
+}
