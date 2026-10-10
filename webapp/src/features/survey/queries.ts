@@ -4,12 +4,16 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import { guidesResponseSchema } from '@ordiks-survey/contracts'
 import type {
   CreateChecklistItemRequest,
   BulkUpdateFindingsRequest,
   CreateDataRequestRequest,
   CreateFactRequest,
   CreateFindingRequest,
+  CreateInterviewRequest,
+  SaveInterviewAnswersRequest,
+  UpdateInterviewRequest,
   UpdateFactRequest,
   UpdateFindingRequest,
   CreateDomainGroupRequest,
@@ -40,6 +44,10 @@ import {
   createDataRequest,
   createFact,
   createFinding,
+  createInterview,
+  deleteInterview,
+  saveInterviewAnswers,
+  updateInterview,
   deleteFact,
   deleteFinding,
   updateFact,
@@ -542,4 +550,57 @@ export function useDeleteFactMutation(projectId: string) {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: surveyQueryKeys.project(projectId) }),
   })
+}
+
+export function useCreateInterviewMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateInterviewRequest) => createInterview(transport, projectId, input),
+    () => [surveyQueryKeys.interviews(projectId)],
+  )
+}
+
+export function useUpdateInterviewMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { interviewId, ...input }: { interviewId: string } & UpdateInterviewRequest) =>
+      updateInterview(transport, interviewId, input),
+    () => [surveyQueryKeys.interviews(projectId)],
+  )
+}
+
+export function useDeleteInterviewMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, interviewId: string) => deleteInterview(transport, interviewId),
+    () => [surveyQueryKeys.interviews(projectId)],
+  )
+}
+
+export function useSaveAnswersMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { interviewId, answers }: { interviewId: string; answers: SaveInterviewAnswersRequest['answers'] },
+    ) => saveInterviewAnswers(transport, interviewId, { answers }),
+    () => [surveyQueryKeys.interviews(projectId)],
+  )
+}
+
+export function useGuidesQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(guidesQueryOptions(auth.transport, projectId))
+}
+
+function guidesQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: [...surveyQueryKeys.project(projectId), 'guides'] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      listGuides(transport, projectId, { signal }),
+  })
+}
+
+export function listGuides(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${projectId}/guides`, guidesResponseSchema, options)
 }

@@ -15,6 +15,7 @@ import {
 import { ComingSoonPage } from './pages/ComingSoonPage'
 import { FactsPage } from './pages/FactsPage'
 import { FindingsPage } from './pages/FindingsPage'
+import { InterviewsPage } from './pages/InterviewsPage'
 import { RequestsPage } from './pages/RequestsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DomainsPage } from './pages/DomainsPage'
@@ -28,7 +29,6 @@ import { useSurveyProject } from './use-survey-project'
 
 /** Разделы волн после F1 — страницы-заглушки. */
 const COMING_SOON_SECTIONS = new Set([
-  'interviews',
   'guides',
   'findings',
   'processes',
@@ -164,6 +164,7 @@ export function SurveySectionPage() {
     case 'domains':
       return <DomainsPage />
     case 'interviews':
+      return <InterviewsPage />
     case 'guides':
     case 'facts':
       return <FactsPage />

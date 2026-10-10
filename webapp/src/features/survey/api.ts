@@ -13,6 +13,12 @@ import {
   createTaskRequestSchema,
   createFactRequestSchema,
   createFindingRequestSchema,
+  createInterviewRequestSchema,
+  interviewDetailSchema,
+  interviewSchema,
+  saveInterviewAnswersRequestSchema,
+  saveInterviewAnswersResponseSchema,
+  updateInterviewRequestSchema,
   dataRequestSchema,
   factsResponseSchema,
   factSchema,
@@ -52,6 +58,10 @@ import {
   type CreateDomainGroupRequest,
   type CreateFactRequest,
   type CreateFindingRequest,
+  type CreateInterviewRequest,
+  type InterviewDetailDto,
+  type SaveInterviewAnswersRequest,
+  type UpdateInterviewRequest,
   type CreateDomainRequest,
   type CreateProjectRequest,
   type CreateStageRequest,
@@ -528,4 +538,53 @@ export function updateFact(
 
 export function deleteFact(transport: AuthenticatedTransport, factId: string) {
   return transport.request(`/api/facts/${id(factId)}`, noContent, { method: 'DELETE' })
+}
+
+// ============================================================
+// Интервью: CRUD + гайд с деревом + ответы
+// ============================================================
+
+export function createInterview(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateInterviewRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/interviews`, interviewSchema, {
+    method: 'POST',
+    body: createInterviewRequestSchema.parse(input),
+  })
+}
+
+export function getInterview(
+  transport: AuthenticatedTransport,
+  interviewId: string,
+): Promise<InterviewDetailDto> {
+  return transport.request(`/api/interviews/${id(interviewId)}`, interviewDetailSchema)
+}
+
+export function updateInterview(
+  transport: AuthenticatedTransport,
+  interviewId: string,
+  input: UpdateInterviewRequest,
+) {
+  return transport.request(`/api/interviews/${id(interviewId)}`, interviewSchema, {
+    method: 'PATCH',
+    body: updateInterviewRequestSchema.parse(input),
+  })
+}
+
+export function deleteInterview(transport: AuthenticatedTransport, interviewId: string) {
+  return transport.request(`/api/interviews/${id(interviewId)}`, noContent, { method: 'DELETE' })
+}
+
+export function saveInterviewAnswers(
+  transport: AuthenticatedTransport,
+  interviewId: string,
+  input: SaveInterviewAnswersRequest,
+) {
+  return transport.request(
+    `/api/interviews/${id(interviewId)}/answers`,
+    saveInterviewAnswersResponseSchema,
+    { method: 'PUT', body: saveInterviewAnswersRequestSchema.parse(input) },
+  )
 }
