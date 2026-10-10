@@ -43,6 +43,7 @@ Cron, the scheduler, and the worker use `createBackgroundRuntime`. It replaces `
 - Production-like runtimes (`NODE_ENV=production` or `COOKIE_SECURE=true`) require HTTPS `CORS_ORIGINS` and a `JWT_SECRET` of at least 64 hex characters (`openssl rand -hex 32`). `NODE_ENV=production` also requires `COOKIE_SECURE=true`.
 - `src/db.ts` adds `uselibpqcompat=true` to a `DATABASE_URL` with `sslmode=require`, so TLS behaves as in libpq.
 - Seeds: `bun run dev:seed` creates the local admin and user from `DEV_SEED_*`. It refuses production and non-loopback database URLs. A rerun with a changed password rehashes it and revokes that account's sessions. `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` feed only `db:deploy`, which creates the first production admin (12–128 characters, no placeholder or repeated pattern).
+- Demo data: `DEMO_SEED_ALLOWED=1 bun run demo:seed` seeds the Ordiks team, client portal users, and the «ЖБИ-завод, Уфа» demo project with stages, domains, checklists, and tasks (`DEMO_SEED_PASSWORD` for every account, `ordiks-demo` by default). The flag is the only gate — the deploy container passes it deliberately — and the seed is idempotent: it upserts users, members, and the invite, and never touches an existing project's progress.
 
 ## API
 
@@ -54,6 +55,8 @@ Cron, the scheduler, and the worker use `createBackgroundRuntime`. It replaces `
 | `/api/users/*` | users | The current user's profile |
 | `/api/admin/*` | users | Dashboard, user directory, role changes; `admin` only |
 | `/api/uploads/*` | uploads | Avatar upload, finalize, read, and delete |
+| `/api/projects/*`, `/api/stages/*`, `/api/tasks/*`, `/api/domain-groups/*`, `/api/domains/*`, `/api/checklist-items/*` | projects | Survey projects and members, stages, tasks, domain coverage with checklists |
+| `/api/invites/*` | invites | Invite codes for the team and clients; public `/api/invites/accept` |
 | `/storage/*` | storage | Signed local URLs; `filesystem` driver only |
 | `/health/live`, `/health/ready` | app | Liveness; readiness (`SELECT 1`, cached for one second, `200` or `503`) |
 
