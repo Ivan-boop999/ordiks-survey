@@ -12,14 +12,15 @@ import {
   viewRoleFor,
   type SurveySection,
 } from './model'
-import { ComingSoonPage } from './pages/ComingSoonPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { FactsPage } from './pages/FactsPage'
 import { FindingsPage } from './pages/FindingsPage'
+import { GuidesPage } from './pages/GuidesPage'
 import { InterviewsPage } from './pages/InterviewsPage'
 import { ProcessesPage } from './pages/ProcessesPage'
 import { ReportPage } from './pages/ReportPage'
 import { RequestsPage } from './pages/RequestsPage'
+import { SettingsPage } from './pages/SettingsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DomainsPage } from './pages/DomainsPage'
 import { PassportPage } from './pages/PassportPage'
@@ -156,6 +157,7 @@ export function SurveySectionPage() {
     case 'interviews':
       return <InterviewsPage />
     case 'guides':
+      return <GuidesPage />
     case 'facts':
       return <FactsPage />
     case 'requests':
@@ -169,7 +171,7 @@ export function SurveySectionPage() {
     case 'report':
       return <ReportPage />
     case 'settings':
-      return <ComingSoonPage section={section} />
+      return <SettingsPage />
   }
 }
 
