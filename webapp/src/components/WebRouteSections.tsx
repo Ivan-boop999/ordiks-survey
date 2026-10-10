@@ -19,7 +19,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Typography } from '@/components/typography'
 
-type HomeDestination = '/login' | '/app' | '/admin'
+type HomeDestination = '/login' | '/app' | '/admin' | '/survey'
 
 export function SessionLoadingSection() {
   return (

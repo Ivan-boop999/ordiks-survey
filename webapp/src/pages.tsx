@@ -20,6 +20,7 @@ import {
   useAuth,
 } from '@/features/auth'
 import { homePathForRole, safeReturnPath } from '@/features/navigation'
+import { InvitePage } from '@/features/survey/pages/InvitePage'
 import { UserHome, UserProfile, UserSettings } from '@/features/users'
 
 export function HomePage() {
@@ -86,6 +87,9 @@ export function ResetPasswordPage() {
     </AuthPageShell>
   )
 }
+
+/** Публичная страница входа по приглашению (/invite?code=…). */
+export { InvitePage }
 
 export function UserHomePage() {
   const user = useWorkspaceUser('user')

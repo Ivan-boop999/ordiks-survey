@@ -3,10 +3,18 @@ import type { UserRole } from '@ordiks-survey/contracts'
 // Every path pattern registered under the role's workspace layout in `src/routes.tsx`, in TanStack
 // syntax (`$param` segments). This is the return-path allow-list: a protected route survives the
 // login round-trip whether or not the sidebar links to it. `tests/navigation.test.ts` fails when
-// this table and the router drift apart.
+// this table and the router drift apart. Приложение обследования (`/survey/*`) доступно обеим
+// платформенным ролям: доступ к конкретному проекту решает сервер (`item.access`).
+const surveyRoutes = [
+  '/survey',
+  '/survey/projects',
+  '/survey/p/$projectId',
+  '/survey/p/$projectId/$section',
+] as const
+
 export const workspaceRoutesByRole = {
-  user: ['/app', '/app/profile', '/app/settings'],
-  admin: ['/admin', '/admin/users', '/admin/settings'],
+  user: ['/app', '/app/profile', '/app/settings', ...surveyRoutes],
+  admin: ['/admin', '/admin/users', '/admin/settings', ...surveyRoutes],
 } as const satisfies Record<UserRole, ReadonlyArray<`/${string}`>>
 
 type WorkspaceRouteTable = Record<UserRole, ReadonlyArray<string>>
@@ -36,7 +44,13 @@ export function navigationItemsForRole(role: UserRole) {
   return navigationByRole[role]
 }
 
-export function homePathForRole(role: UserRole): '/app' | '/admin' {
+/** Домашний маршрут роли: пользователь приложения живёт в обследовании, админ — в консоли. */
+export function homePathForRole(role: UserRole): '/survey' | '/admin' {
+  return role === 'admin' ? '/admin' : '/survey'
+}
+
+/** Домашний маршрут внутри legacy-воркспейса шаблона (/app или /admin). */
+export function workspaceHomeForRole(role: UserRole): UserRoutePath | AdminRoutePath {
   return role === 'admin' ? '/admin' : '/app'
 }
 

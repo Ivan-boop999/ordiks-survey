@@ -3,6 +3,7 @@ export {
   navigationItemsForRole,
   resolveRoleDestination,
   safeReturnPath,
+  workspaceHomeForRole,
   type AdminRoutePath,
   type UserRoutePath,
   type WorkspaceRoutePath,

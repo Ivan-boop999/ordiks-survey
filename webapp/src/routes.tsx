@@ -47,6 +47,49 @@ const resetPasswordRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages'), 'ResetPasswordPage'),
 })
 
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite',
+  validateSearch: (search: Record<string, unknown>) => ({
+    code: typeof search.code === 'string' ? search.code : undefined,
+  }),
+  component: lazyRouteComponent(() => import('./pages'), 'InvitePage'),
+})
+
+// ============================================================
+// Приложение обследования (ОРДИКС Обследование)
+// ============================================================
+
+const surveyWorkspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'surveyWorkspace',
+  component: lazyRouteComponent(() => import('@/features/survey'), 'SurveyWorkspaceLayout'),
+})
+
+const surveyIndexRoute = createRoute({
+  getParentRoute: () => surveyWorkspaceRoute,
+  path: '/survey',
+  component: lazyRouteComponent(() => import('@/features/survey'), 'SurveyIndexPage'),
+})
+
+const surveyProjectsRoute = createRoute({
+  getParentRoute: () => surveyWorkspaceRoute,
+  path: '/survey/projects',
+  component: lazyRouteComponent(() => import('@/features/survey/pages/Exports'), 'ProjectsPage'),
+})
+
+const surveyProjectRoute = createRoute({
+  getParentRoute: () => surveyWorkspaceRoute,
+  path: '/survey/p/$projectId',
+  component: lazyRouteComponent(() => import('@/features/survey'), 'SurveyProjectIndexPage'),
+})
+
+const surveySectionRoute = createRoute({
+  getParentRoute: () => surveyWorkspaceRoute,
+  path: '/survey/p/$projectId/$section',
+  component: lazyRouteComponent(() => import('@/features/survey'), 'SurveySectionPage'),
+})
+
 const userWorkspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'userWorkspace',
@@ -101,6 +144,7 @@ const routeTree = rootRoute.addChildren([
   signupRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
+  inviteRoute,
   userWorkspaceRoute.addChildren([
     userHomeRoute,
     userProfileRoute,
@@ -110,6 +154,12 @@ const routeTree = rootRoute.addChildren([
     adminDashboardRoute,
     adminUsersRoute,
     adminSettingsRoute,
+  ]),
+  surveyWorkspaceRoute.addChildren([
+    surveyIndexRoute,
+    surveyProjectsRoute,
+    surveyProjectRoute,
+    surveySectionRoute,
   ]),
 ])
 

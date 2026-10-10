@@ -16,8 +16,8 @@ import {
 } from '@/components/dashboard'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import {
-  homePathForRole,
   navigationItemsForRole,
+  workspaceHomeForRole,
 } from '@/features/navigation'
 
 const iconsByPath = {
@@ -49,7 +49,7 @@ export function WorkspaceShell({
   const pathname = useLocation({ select: (location) => location.pathname })
   const navigationItems = navigationItemsForRole(user.role)
   const activeItem = navigationItems.find((item) => item.to === pathname)
-  const homePath = homePathForRole(user.role)
+  const homePath = workspaceHomeForRole(user.role)
   const settingsPath = user.role === 'admin' ? '/admin/settings' : '/app/settings'
   const items: ReadonlyArray<DashboardNavigationItem> = navigationItems.map((item) => ({
     ...item,
