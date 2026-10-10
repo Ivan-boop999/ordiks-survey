@@ -498,8 +498,10 @@ model ProcessStep {
   /// Метки инструментов: Excel / 1С / бумага / …
   tools       Json        @default("[]")
   effect      String?
-  /// Куда переходит шаг AS-IS в TO-BE.
+  /// Куда переходит шаг AS-IS в TO-BE; null + disappears=false — «не определено» (mapTo='' прототипа).
   mapToStepId String?     @map("map_to_step_id") @db.Uuid
+  /// Шаг исчезает в TO-BE (mapTo='none' прототипа): ручной перенос/лишний шаг.
+  disappears  Boolean     @default(false)
   sortOrder   Int         @default(0) @map("sort_order")
 
   process   Process       @relation(fields: [processId], references: [id], onDelete: Cascade, map: "process_steps_process_id_fkey")
