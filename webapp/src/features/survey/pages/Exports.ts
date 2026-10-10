@@ -1,0 +1,6 @@
+export { DashboardPage } from './DashboardPage'
+export { DomainsPage } from './DomainsPage'
+export { PassportPage } from './PassportPage'
+export { PlanPage } from './PlanPage'
+export { ProjectsPage } from './ProjectsPage'
+export { StagesPage } from './StagesPage'
