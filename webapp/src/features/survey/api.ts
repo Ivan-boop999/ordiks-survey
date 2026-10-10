@@ -4,12 +4,17 @@ import {
   checklistItemSchema,
   createChecklistItemRequestSchema,
   createDataRequestRequestSchema,
+  bulkUpdateFindingsRequestSchema,
+  bulkUpdateFindingsResponseSchema,
   createDomainGroupRequestSchema,
   createDomainRequestSchema,
   createProjectRequestSchema,
   createStageRequestSchema,
   createTaskRequestSchema,
+  createFindingRequestSchema,
   dataRequestSchema,
+  factsResponseSchema,
+  findingSchema,
   dataRequestsQuerySchema,
   dataRequestsResponseSchema,
   domainGroupSchema,
@@ -31,6 +36,7 @@ import {
   updateChecklistItemRequestSchema,
   updateDataRequestRequestSchema,
   updateDataRequestStatusRequestSchema,
+  updateFindingRequestSchema,
   updateDomainGroupRequestSchema,
   updateDomainRequestSchema,
   updateProjectRequestSchema,
@@ -39,7 +45,9 @@ import {
   type AcceptInviteRequest,
   type CreateChecklistItemRequest,
   type CreateDataRequestRequest,
+  type BulkUpdateFindingsRequest,
   type CreateDomainGroupRequest,
+  type CreateFindingRequest,
   type CreateDomainRequest,
   type CreateProjectRequest,
   type CreateStageRequest,
@@ -51,6 +59,7 @@ import {
   type UpdateChecklistItemRequest,
   type UpdateDataRequestRequest,
   type UpdateDataRequestStatusRequest,
+  type UpdateFindingRequest,
   type UpdateDomainGroupRequest,
   type UpdateDomainRequest,
   type UpdateProjectRequest,
@@ -427,4 +436,61 @@ export function updateDataRequest(
 
 export function deleteDataRequest(transport: AuthenticatedTransport, requestId: string) {
   return transport.request(`/api/requests/${id(requestId)}`, noContent, { method: 'DELETE' })
+}
+
+// ============================================================
+// Находки: CRUD, bulk; факты: список (для связей-доказательств)
+// ============================================================
+
+export function createFinding(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateFindingRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/findings`, findingSchema, {
+    method: 'POST',
+    body: createFindingRequestSchema.parse(input),
+  })
+}
+
+export function updateFinding(
+  transport: AuthenticatedTransport,
+  findingId: string,
+  input: UpdateFindingRequest,
+) {
+  return transport.request(`/api/findings/${id(findingId)}`, findingSchema, {
+    method: 'PATCH',
+    body: updateFindingRequestSchema.parse(input),
+  })
+}
+
+export function deleteFinding(transport: AuthenticatedTransport, findingId: string) {
+  return transport.request(`/api/findings/${id(findingId)}`, noContent, { method: 'DELETE' })
+}
+
+export function bulkUpdateFindings(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: BulkUpdateFindingsRequest,
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/findings/bulk`,
+    bulkUpdateFindingsResponseSchema,
+    { method: 'POST', body: bulkUpdateFindingsRequestSchema.parse(input) },
+  )
+}
+
+export function listFacts(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${id(projectId)}/facts`, factsResponseSchema, options)
+}
+
+export function factFileDownloadUrl(
+  transport: AuthenticatedTransport,
+  factId: string,
+): Promise<{ url: string }> {
+  return transport.request(`/api/facts/${id(factId)}/file/download`, z.object({ url: z.string() }))
 }

@@ -13,6 +13,7 @@ import {
   type SurveySection,
 } from './model'
 import { ComingSoonPage } from './pages/ComingSoonPage'
+import { FindingsPage } from './pages/FindingsPage'
 import { RequestsPage } from './pages/RequestsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DomainsPage } from './pages/DomainsPage'
@@ -168,6 +169,7 @@ export function SurveySectionPage() {
     case 'requests':
       return <RequestsPage />
     case 'findings':
+      return <FindingsPage />
     case 'processes':
     case 'analytics':
     case 'report':

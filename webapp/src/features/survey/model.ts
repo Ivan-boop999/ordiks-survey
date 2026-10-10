@@ -9,8 +9,7 @@ import type {
   ProjectSummary,
   RequestStatus,
   StageStatus,
-  TaskStatus,
-} from '@ordiks-survey/contracts'
+  TaskStatus } from '@ordiks-survey/contracts'
 
 import {
   AlertCircleIcon,
@@ -358,4 +357,12 @@ export function defaultProjectId(
     if (lastUsed && lastUsed.status === 'active') return lastUsed.id
   }
   return projects.find((project) => project.status === 'active')?.id ?? projects[0]?.id ?? null
+}
+
+/** Цвета чипа приоритета находки (как в прототипе). */
+export const PRIORITY_COLORS: Record<string, ChipColor> = {
+  Критично: 'red',
+  Высокий: 'amber',
+  Средний: 'blue',
+  Низкий: 'gray',
 }

@@ -6,7 +6,10 @@ import {
 } from '@tanstack/react-query'
 import type {
   CreateChecklistItemRequest,
+  BulkUpdateFindingsRequest,
   CreateDataRequestRequest,
+  CreateFindingRequest,
+  UpdateFindingRequest,
   CreateDomainGroupRequest,
   CreateDomainRequest,
   CreateProjectRequest,
@@ -29,8 +32,12 @@ import { useAuth } from '@/features/auth'
 import type { AuthenticatedTransport } from '@/platform/api'
 import {
   archiveProject,
+  bulkUpdateFindings,
   createChecklistItem,
   createDataRequest,
+  createFinding,
+  deleteFinding,
+  updateFinding,
   createDomain,
   createDomainGroup,
   createProject,
@@ -45,6 +52,7 @@ import {
   getProject,
   listDomainGroups,
   listDataRequests,
+  listFacts,
   listFindings,
   listInterviews,
   listProjectMembers,
@@ -445,4 +453,45 @@ export function useDeleteDataRequestMutation(projectId: string) {
     (transport, requestId: string) => deleteDataRequest(transport, requestId),
     () => [surveyQueryKeys.requests(projectId)],
   )
+}
+
+export function useCreateFindingMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateFindingRequest) => createFinding(transport, projectId, input),
+    () => [surveyQueryKeys.findings(projectId)],
+  )
+}
+
+export function useUpdateFindingMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { findingId, ...input }: { findingId: string } & UpdateFindingRequest) =>
+      updateFinding(transport, findingId, input),
+    () => [surveyQueryKeys.findings(projectId)],
+  )
+}
+
+export function useDeleteFindingMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, findingId: string) => deleteFinding(transport, findingId),
+    () => [surveyQueryKeys.findings(projectId)],
+  )
+}
+
+export function useBulkUpdateFindingsMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: BulkUpdateFindingsRequest) => bulkUpdateFindings(transport, projectId, input),
+    () => [surveyQueryKeys.findings(projectId)],
+  )
+}
+
+export function factsQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: [...surveyQueryKeys.project(projectId), 'facts'] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) => listFacts(transport, projectId, { signal }),
+  })
+}
+
+export function useFactsQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(factsQueryOptions(auth.transport, projectId))
 }
