@@ -42,6 +42,24 @@ export type InterviewStatus = z.infer<typeof interviewStatusSchema>
 export const requestStatusSchema = z.enum(['requested', 'in_progress', 'received'])
 export type RequestStatus = z.infer<typeof requestStatusSchema>
 
+/// Сторона процесса: фактическая (AS-IS) или целевая (TO-BE).
+export const processSideSchema = z.enum(['asis', 'tobe'])
+export type ProcessSide = z.infer<typeof processSideSchema>
+
+/// Тип объекта треда комментариев (зеркало enum ThreadType в Prisma); `report` — раздел отчёта.
+export const threadTypeSchema = z.enum([
+  'fact',
+  'finding',
+  'interview',
+  'task',
+  'request',
+  'domain',
+  'process',
+  'report',
+  'registry_entry',
+])
+export type ThreadType = z.infer<typeof threadTypeSchema>
+
 /// Поведение ввода факта: фото (камера/галерея), файл (документ) или текстовая заметка.
 export const factKindSchema = z.enum(['photo', 'file', 'note'])
 export type FactKind = z.infer<typeof factKindSchema>

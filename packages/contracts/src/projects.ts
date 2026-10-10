@@ -114,6 +114,8 @@ export const projectSummarySchema = z
     city: z.string(),
     status: projectStatusSchema,
     access: projectAccessSchema,
+    /// Непрочитанные комментарии проекта: новее ThreadRead пользователя, не от него самого.
+    unreadComments: z.number().int().nonnegative(),
     createdAt: isoDateTime,
     updatedAt: isoDateTime,
   })
