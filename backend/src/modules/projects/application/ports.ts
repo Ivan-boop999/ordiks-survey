@@ -138,6 +138,9 @@ export type ProjectsRepository = {
 
   listProjects(userId: string, orgRole: OrgRole): Promise<Array<ProjectRow & { memberRole: MemberRole | null }>>
 
+  /** Непрочитанные комментарии по проектам: новее ThreadRead пользователя и не от него. */
+  countUnreadComments(userId: string, projectIds: string[]): Promise<Map<string, number>>
+
   createProject(input: CreateProjectWrite): Promise<ProjectRow>
 
   findProjectById(projectId: string): Promise<ProjectDetailRow | null>

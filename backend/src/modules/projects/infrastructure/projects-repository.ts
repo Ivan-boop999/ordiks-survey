@@ -61,6 +61,24 @@ export function createPrismaProjectsRepository(db: DbClient): ProjectsRepository
       }))
     },
 
+    async countUnreadComments(userId, projectIds) {
+      const result = new Map<string, number>()
+      if (projectIds.length === 0) return result
+      // Комментарии доступных проектов, новее последнего чтения треда (нет чтения — не прочитан)
+      // и не от самого пользователя; тот же критерий, что unreadCount() прототипа.
+      const rows = await db.$queryRaw<Array<{ projectId: string; unread: bigint }>>`
+        SELECT c.project_id AS "projectId", COUNT(*)::bigint AS unread
+        FROM comments c
+        LEFT JOIN thread_reads tr
+          ON tr.user_id = ${userId} AND tr.thread_type = c.thread_type AND tr.thread_id = c.thread_id
+        WHERE c.project_id IN (${Prisma.join(projectIds)})
+          AND c.author_id <> ${userId}
+          AND (tr.last_read_at IS NULL OR c.created_at > tr.last_read_at)
+        GROUP BY c.project_id`
+      for (const row of rows) result.set(row.projectId, Number(row.unread))
+      return result
+    },
+
     async createProject(input: CreateProjectWrite) {
       try {
         // Группы с доменами создаются вторым шагом: вложенное создание домена в группе

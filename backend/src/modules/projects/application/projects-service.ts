@@ -42,7 +42,12 @@ export class ProjectsService {
 
   async listProjects(principal: AuthenticatedPrincipal): Promise<ProjectSummary[]> {
     const rows = await this.dependencies.repository.listProjects(principal.id, principal.orgRole)
-    return rows.map((row) => this.summaryDto(row, principal.orgRole))
+    // Непрочитанные комментарии — один GROUP BY на весь список, не по запросу на проект.
+    const unread = await this.dependencies.repository.countUnreadComments(
+      principal.id,
+      rows.map((row) => row.id),
+    )
+    return rows.map((row) => this.summaryDto(row, principal.orgRole, unread.get(row.id) ?? 0))
   }
 
   async createProject(principal: AuthenticatedPrincipal, input: CreateProjectRequest): Promise<ProjectDetail> {
@@ -56,6 +61,8 @@ export class ProjectsService {
     return this.detailDto(
       (await this.dependencies.repository.findProjectById(row.id)) ?? { ...row, members: [] },
       { view: true, comment: true, edit: true },
+      // Свежий проект: комментариев быть не может.
+      0,
     )
   }
 
@@ -63,7 +70,8 @@ export class ProjectsService {
     const access = await this.dependencies.guard.requireView(principal.id, projectId)
     const row = await this.dependencies.repository.findProjectById(projectId)
     if (!row) throw new ProjectsFailure('not_found', 'Project not found')
-    return this.detailDto(row, access)
+    const unread = await this.dependencies.repository.countUnreadComments(principal.id, [projectId])
+    return this.detailDto(row, access, unread.get(projectId) ?? 0)
   }
 
   async updateProject(
@@ -199,7 +207,11 @@ export class ProjectsService {
     }
   }
 
-  private summaryDto(row: ProjectRow & { memberRole: MemberRole | null }, orgRole: OrgRole): ProjectSummary {
+  private summaryDto(
+    row: ProjectRow & { memberRole: MemberRole | null },
+    orgRole: OrgRole,
+    unreadComments: number,
+  ): ProjectSummary {
     return {
       id: row.id,
       name: row.name,
@@ -207,12 +219,13 @@ export class ProjectsService {
       city: row.city,
       status: row.status,
       access: accessFor({ orgRole, memberRole: row.memberRole }),
+      unreadComments,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
   }
 
-  private detailDto(row: ProjectDetailRow, access: ProjectAccess): ProjectDetail {
+  private detailDto(row: ProjectDetailRow, access: ProjectAccess, unreadComments: number): ProjectDetail {
     return {
       id: row.id,
       name: row.name,
@@ -220,6 +233,7 @@ export class ProjectsService {
       city: row.city,
       status: row.status,
       access,
+      unreadComments,
       boundaries: row.boundaries,
       goals: row.goals,
       shops: row.shops,
