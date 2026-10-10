@@ -1,8 +1,10 @@
 import type {
   AnswerValue,
+  CreateGuideQuestionRequest,
   GuideDto,
   GuideQuestionDto,
   InterviewAnswerDto,
+  UpdateGuideQuestionRequest,
 } from '@ordiks-survey/contracts'
 
 // ============================================================
@@ -201,4 +203,104 @@ export function conditionLabel(
         : 'Нет'
       : question.showIfValue
   return `если «${text}» = ${answer}`
+}
+
+// ============================================================
+// Форма вопроса конструктора: черновик → payload API
+// ============================================================
+
+/** Состояние формы вопроса: тип, текст, варианты (textarea по одному в строке), условие показа. */
+export type QuestionFormDraft = {
+  type: GuideQuestionDto['type']
+  text: string
+  optionsText: string
+  /** Закодированное условие (encodeCondition) или '' — показывать всегда. */
+  condition: string
+}
+
+/** Вопросы этих типов несут варианты; для остальных options игнорируются сервером. */
+export function questionTypeHasOptions(type: GuideQuestionDto['type']): boolean {
+  return type === 'choice' || type === 'multi'
+}
+
+export function draftFromQuestion(question: GuideQuestionDto | null): QuestionFormDraft {
+  if (!question) {
+    return { type: 'text', text: '', optionsText: '', condition: '' }
+  }
+  return {
+    type: question.type,
+    text: question.text,
+    optionsText: question.options.join('\n'),
+    condition:
+      question.showIfQuestionId && question.showIfValue
+        ? encodeCondition(question.showIfQuestionId, question.showIfValue)
+        : '',
+  }
+}
+
+/** Строки textarea → массив вариантов: трим, пустые выбрасываются. */
+export function parseOptionsText(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
+export function optionsToText(options: ReadonlyArray<string>): string {
+  return options.join('\n')
+}
+
+export type QuestionFormErrors = Partial<Record<'text' | 'options' | 'condition', string>>
+
+export type QuestionPayloadResult<TPayload> = {
+  errors: QuestionFormErrors
+  payload: TPayload | null
+}
+
+/**
+ * Черновик формы → payload для API. Варианты обязательны для choice/multi и очищаются
+ * для остальных; условие декодируется в showIfQuestionId + showIfValue. Ошибки — по полям
+ * (как validateInviteForm), чтобы форма показывала их у вводов до отправки.
+ */
+export function questionPayloadFromDraft(
+  draft: QuestionFormDraft,
+): QuestionPayloadResult<CreateGuideQuestionRequest> {
+  const errors: QuestionFormErrors = {}
+  const text = draft.text.trim()
+  if (text.length === 0) errors.text = 'Текст вопроса обязателен.'
+  if (text.length > 1000) errors.text = 'Максимум 1000 символов.'
+
+  const options = questionTypeHasOptions(draft.type) ? parseOptionsText(draft.optionsText) : []
+  if (questionTypeHasOptions(draft.type) && options.length === 0) {
+    errors.options = 'Для выбора вариантов задайте хотя бы один (по одному в строке).'
+  }
+  if (options.some((option) => option.length > 200)) {
+    errors.options = 'Вариант — максимум 200 символов.'
+  }
+  if (options.length > 20) errors.options = 'Максимум 20 вариантов.'
+
+  const condition = draft.condition ? decodeCondition(draft.condition) : null
+  if (draft.condition && !condition) {
+    errors.condition = 'Условие показа не распознано — выберите из списка.'
+  }
+
+  if (Object.keys(errors).length > 0) return { errors, payload: null }
+
+  const payload: CreateGuideQuestionRequest = {
+    type: draft.type,
+    text,
+    options,
+    showIfQuestionId: condition?.questionId ?? null,
+    showIfValue: condition?.answerValue ?? null,
+  }
+  return { errors: {}, payload }
+}
+
+/** Для PATCH достаточно тех же полей: схема обновления — подмножество схемы создания. */
+export function questionUpdatePayloadFromDraft(
+  draft: QuestionFormDraft,
+): QuestionPayloadResult<UpdateGuideQuestionRequest> {
+  const result = questionPayloadFromDraft(draft)
+  if (result.payload === null) return { errors: result.errors, payload: null }
+  return { errors: {}, payload: { ...result.payload } }
 }
