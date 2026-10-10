@@ -15,24 +15,30 @@ test('role navigation exposes only the current workspace', () => {
   // path reachable from the user menu is a bug.
   expect(navigationItemsForRole('user').every((item) => item.to.startsWith('/app'))).toBe(true)
   expect(navigationItemsForRole('admin').every((item) => item.to.startsWith('/admin'))).toBe(true)
-  expect(homePathForRole('user')).toBe('/app')
+  // Домашний маршрут пользователя — приложение обследования; админ попадает в консоль.
+  expect(homePathForRole('user')).toBe('/survey')
   expect(homePathForRole('admin')).toBe('/admin')
 })
 
 test('cross-role destinations resolve to the current role home', () => {
   expect(resolveRoleDestination('user', '/app/profile')).toBe('/app/profile')
-  expect(resolveRoleDestination('user', '/admin/users')).toBe('/app')
+  expect(resolveRoleDestination('user', '/admin/users')).toBe('/survey')
   expect(resolveRoleDestination('admin', '/admin/settings')).toBe('/admin/settings')
   expect(resolveRoleDestination('admin', '/app')).toBe('/admin')
+  // Разделы обследования доступны обеим ролям: доступ к проекту решает сервер.
+  expect(resolveRoleDestination('user', '/survey/p/42/dashboard')).toBe('/survey/p/42/dashboard')
+  expect(resolveRoleDestination('admin', '/survey/projects')).toBe('/survey/projects')
 })
 
 test('workspace route table matches the routes registered under each workspace layout', () => {
-  // `WorkspaceRoute` in `src/pages.tsx` guards these two layout ids. Every path registered below
-  // them is a protected route that must survive a login round-trip whether or not it is in the
-  // sidebar, so the return-path allow-list is pinned to the router, not to the menu.
-  const rolesByLayoutId: Record<string, UserRole> = {
-    '/adminWorkspace': 'admin',
-    '/userWorkspace': 'user',
+  // `WorkspaceRoute` in `src/pages.tsx` guards these two layout ids, and the survey workspace is
+  // shared by both roles. Every path registered below them is a protected route that must survive
+  // a login round-trip whether or not it is in the sidebar, so the return-path allow-list is
+  // pinned to the router, not to the menu.
+  const rolesByLayoutId: Record<string, UserRole[]> = {
+    '/adminWorkspace': ['admin'],
+    '/userWorkspace': ['user'],
+    '/surveyWorkspace': ['admin', 'user'],
   }
   const registered: Record<UserRole, string[]> = { admin: [], user: [] }
 
@@ -41,7 +47,9 @@ test('workspace route table matches the routes registered under each workspace l
     let layout = route.parentRoute
     while (layout && !(layout.id in rolesByLayoutId)) layout = layout.parentRoute
     if (!layout) continue
-    registered[rolesByLayoutId[layout.id]].push(route.fullPath)
+    for (const role of rolesByLayoutId[layout.id] ?? []) {
+      registered[role].push(route.fullPath)
+    }
   }
 
   expect(registered.user.toSorted()).toEqual([...workspaceRoutesByRole.user].toSorted())
