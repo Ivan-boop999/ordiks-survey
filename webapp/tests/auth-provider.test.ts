@@ -15,6 +15,7 @@ const user: UserDto = {
   email: 'user@example.com',
   displayName: null,
   role: 'user',
+  orgRole: 'client',
   createdAt: '2026-05-11T00:00:00.000Z',
 }
 const restoredAccessToken = accessTokenFor('user_1')
