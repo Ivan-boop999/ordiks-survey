@@ -473,7 +473,7 @@ async function createProjectStatus(app: App, session: Session, project: object) 
 async function createProject(
   app: App,
   session: Session,
-  options: { project?: { name?: string } & object; template?: object } = {},
+  options: { project?: { name?: string } & Record<string, unknown>; template?: object } = {},
 ) {
   const response = await createProjectStatus(app, session, {
     name: options.project?.name ?? `Проект ${crypto.randomUUID().slice(0, 8)}`,
