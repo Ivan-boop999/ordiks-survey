@@ -26,6 +26,7 @@
     "prisma:seed": "prisma db seed",
     "db:deploy": "bun scripts/deploy-database.ts",
     "db:adopt-owner": "bun scripts/adopt-database-owner.ts",
+    "demo:seed": "bun scripts/seed-demo.ts",
     "prisma:validate": "prisma validate"
   },
   "dependencies": {

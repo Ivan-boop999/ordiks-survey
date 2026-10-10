@@ -44,6 +44,7 @@
     "storybook:build:website": "bun run --cwd website storybook:build",
     "dev:backend:s3": "bun scripts/storage-local.mjs dev-backend",
     "dev:seed": "bun run --cwd backend prisma:seed",
+    "demo:seed": "bun run --cwd backend demo:seed",
     "build": "bun run --filter '*' --sequential build",
     "build:webapp": "bun run --cwd webapp build",
     "build:website": "bun run --cwd website build",
