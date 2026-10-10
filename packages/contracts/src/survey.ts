@@ -36,6 +36,33 @@ export type TaskStatus = z.infer<typeof taskStatusSchema>
 export const domainStatusSchema = z.enum(['not_started', 'in_progress', 'closed'])
 export type DomainStatus = z.infer<typeof domainStatusSchema>
 
+export const interviewStatusSchema = z.enum(['planned', 'done', 'formatted'])
+export type InterviewStatus = z.infer<typeof interviewStatusSchema>
+
+export const requestStatusSchema = z.enum(['requested', 'in_progress', 'received'])
+export type RequestStatus = z.infer<typeof requestStatusSchema>
+
+/// Поведение ввода факта: фото (камера/галерея), файл (документ) или текстовая заметка.
+export const factKindSchema = z.enum(['photo', 'file', 'note'])
+export type FactKind = z.infer<typeof factKindSchema>
+
+/// Тип вопроса гайда: текст / да-нет / шкала 1..5 / один вариант / несколько вариантов.
+export const guideQuestionTypeSchema = z.enum(['text', 'yn', 'scale', 'choice', 'multi'])
+export type GuideQuestionType = z.infer<typeof guideQuestionTypeSchema>
+
+/**
+ * Значение ответа интервью: строка (text/yn/scale/choice), число (scale допустим и числом —
+ * прототип шлёт строки, API нормализует), массив выбранных вариантов (multi) или null
+ * («не отвечено»; такой ответ не сохраняется вовсе).
+ */
+export const answerValueSchema = z.union([
+  z.string().max(4000),
+  z.number().finite(),
+  z.array(z.string().max(200)).max(50),
+  z.null(),
+])
+export type AnswerValue = z.infer<typeof answerValueSchema>
+
 /** Что разрешено пользователю в проекте; сервер считает это на каждый запрос. */
 export const projectAccessSchema = z
   .object({
