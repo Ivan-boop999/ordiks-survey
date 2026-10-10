@@ -27,7 +27,7 @@ const memberWithUserSelect = {
   user: { select: { email: true, displayName: true } },
 } as const
 
-const domainOrder = [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }]
+const domainOrder = [{ sortOrder: 'asc' as const }, { id: 'asc' as const }]
 
 export function createPrismaProjectsRepository(db: DbClient): ProjectsRepository {
   return {
@@ -199,7 +199,7 @@ export function createPrismaProjectsRepository(db: DbClient): ProjectsRepository
     listStages(projectId) {
       return db.stage.findMany({
         where: { projectId },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
       }) as Promise<StageRow[]>
     },
 
@@ -239,7 +239,7 @@ export function createPrismaProjectsRepository(db: DbClient): ProjectsRepository
           ...(query.assigneeId === undefined ? {} : { assigneeId: query.assigneeId }),
           ...(query.status === undefined ? {} : { status: query.status }),
         },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
       }) as Promise<TaskRow[]>
     },
 

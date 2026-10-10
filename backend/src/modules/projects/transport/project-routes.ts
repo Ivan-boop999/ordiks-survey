@@ -212,6 +212,7 @@ type CreateProjectRoutesOptions = {
 export function createProjectRoutes({ requireAuth, service }: CreateProjectRoutesOptions) {
   const routes = new OpenAPIHono<AuthHttpEnv>({ defaultHook: validationErrorHook })
 
+  routes.use('/projects', requireAuth)
   routes.use('/projects/*', requireAuth)
   routes.openapi(listProjectsRoute, async (c) => {
     const items = await executeProjects(() => service.listProjects(c.var.user))

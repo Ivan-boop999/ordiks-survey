@@ -21,8 +21,9 @@ export class ProjectAccessGuard {
 
   async requireView(userId: string, projectId: string): Promise<ProjectAccess> {
     const context = await this.context(userId, projectId)
+    // Клиент без членства не должен отличать чужой проект от отсутствующего.
     if (!context.view) {
-      throw new ProjectsFailure('forbidden', 'You do not have access to this project')
+      throw new ProjectsFailure('not_found', 'Project not found')
     }
     return context
   }
@@ -30,7 +31,11 @@ export class ProjectAccessGuard {
   async requireEdit(userId: string, projectId: string): Promise<ProjectAccess> {
     const context = await this.context(userId, projectId)
     if (!context.edit) {
-      throw new ProjectsFailure('forbidden', 'Only the Ordiks team can edit this project')
+      // Участник проект знает о его существовании — ему честный 403; постороннему — 404.
+      throw new ProjectsFailure(
+        context.view ? 'forbidden' : 'not_found',
+        context.view ? 'Only the Ordiks team can edit this project' : 'Project not found',
+      )
     }
     return context
   }

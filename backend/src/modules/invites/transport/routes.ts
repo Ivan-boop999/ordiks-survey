@@ -106,8 +106,12 @@ type CreateInvitesRoutesOptions = {
 export function createInvitesRoutes({ requireAuth, service }: CreateInvitesRoutesOptions) {
   const routes = new OpenAPIHono<AuthHttpEnv>({ defaultHook: validationErrorHook })
 
-  routes.use('/invites/:inviteId', requireAuth)
   routes.use('/invites', requireAuth)
+  // Всё под /invites/* требует входа, кроме публичного POST /invites/accept: аккаунта ещё нет.
+  routes.use('/invites/*', (c, next) => {
+    if (c.req.method === 'POST' && c.req.path.endsWith('/invites/accept')) return next()
+    return requireAuth(c, next)
+  })
   routes.openapi(listInvitesRoute, async (c) => {
     const items = await executeInvites(() => service.listInvites(c.var.user))
     return c.json({ items }, 200)
