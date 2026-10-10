@@ -1,0 +1,810 @@
+// ============================================================
+// Ордикс Обследование — доменная схема.
+// Охватывает все сущности кликабельного прототипа:
+// проекты, этапы/задачи, домены с чек-листами, гайды и интервью,
+// факты, запросы данных, находки, процессы AS-IS/TO-BE со схемами,
+// отчёт с визами, комментарии-треды, аналитические реестры,
+// пользовательские реестры, шаблоны проектов и приглашения.
+// ============================================================
+
+/// Глобальная роль в организации ОРДИКС. Template UserRole (user/admin) остаётся
+/// для служебных страниц шаблона; доступ к домену определяется этой ролью
+/// и членством в проекте.
+enum OrgRole {
+  owner
+  manager
+  analyst
+  client
+
+  @@map("org_role")
+}
+
+/// Роль участника в конкретном проекте. Для сотрудников ОРДИКС дублирует
+/// глобальную роль; для заказчика задаёт уровень доступа в портале.
+enum MemberRole {
+  manager
+  analyst
+  client_lead
+  client_staff
+  observer
+
+  @@map("member_role")
+}
+
+enum ProjectStatus {
+  active
+  archived
+
+  @@map("project_status")
+}
+
+enum StageStatus {
+  planned
+  active
+  done
+
+  @@map("stage_status")
+}
+
+enum TaskStatus {
+  todo
+  doing
+  done
+  cancelled
+
+  @@map("task_status")
+}
+
+enum DomainStatus {
+  not_started
+  in_progress
+  closed
+
+  @@map("domain_status")
+}
+
+enum InterviewStatus {
+  planned
+  done
+  formatted
+
+  @@map("interview_status")
+}
+
+enum RequestStatus {
+  requested
+  in_progress
+  received
+
+  @@map("request_status")
+}
+
+enum ProcessSide {
+  asis
+  tobe
+
+  @@map("process_side")
+}
+
+/// Тип объекта, к которому привязан тред комментариев.
+enum ThreadType {
+  fact
+  finding
+  interview
+  task
+  request
+  domain
+  process
+  report
+  registry_entry
+
+  @@map("thread_type")
+}
+
+enum ApprovalDecision {
+  approved
+  changes
+
+  @@map("approval_decision")
+}
+
+enum GapKind {
+  std
+  dev
+  manual
+
+  @@map("gap_kind")
+}
+
+enum GapStatus {
+  open
+  agreed
+  rejected
+
+  @@map("gap_status")
+}
+
+enum MoscowPriority {
+  must
+  should
+  could
+  wont
+
+  @@map("moscow_priority")
+}
+
+enum RiskStatus {
+  open
+  mitigated
+  closed
+
+  @@map("risk_status")
+}
+
+enum QuickWinStatus {
+  suggested
+  accepted
+  done
+
+  @@map("quick_win_status")
+}
+
+enum DecisionStatus {
+  active
+  superseded
+
+  @@map("decision_status")
+}
+
+enum CommunicationKind {
+  meeting
+  call
+  email
+
+  @@map("communication_kind")
+}
+
+model Project {
+  id         String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name       String
+  client     String        @default("")
+  city       String        @default("")
+  status     ProjectStatus @default(active)
+  boundaries String        @default("")
+  goals      String        @default("")
+  /// Цеха/участки: массив строк.
+  shops      Json          @default("[]")
+  /// Справочники проекта: статусы находок (name+color), приоритеты, поля паспорта,
+  /// значения паспорта, типы фактов. Формат — как в прототипе.
+  settings   Json          @default("{}")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  members      ProjectMember[]
+  stages       Stage[]
+  tasks        Task[]
+  groups       DomainGroup[]
+  domains      Domain[]
+  guides       Guide[]
+  interviews   Interview[]
+  facts        Fact[]
+  requests     DataRequest[]
+  findings     Finding[]
+  processes    Process[]
+  sections     ReportSection[]
+  comments     Comment[]
+  gaps         Gap[]
+  risks        Risk[]
+  requirements Requirement[]
+  decisions    DecisionLog[]
+  communications Communication[]
+  quickWins    QuickWin[]
+  baselines    Baseline[]
+  registries   CustomRegistry[]
+
+  @@index([status], map: "projects_status_idx")
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String     @map("project_id") @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  role      MemberRole
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "project_members_project_id_fkey")
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, map: "project_members_user_id_fkey")
+
+  @@unique([projectId, userId], map: "project_members_project_user_key")
+  @@index([userId], map: "project_members_user_idx")
+  @@map("project_members")
+}
+
+model Stage {
+  id        String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String      @map("project_id") @db.Uuid
+  name      String
+  sortOrder Int         @default(0) @map("sort_order")
+  startAt   DateTime?   @map("start_at")
+  endAt     DateTime?   @map("end_at")
+  milestone Boolean     @default(false)
+  status    StageStatus @default(planned)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "stages_project_id_fkey")
+  tasks   Task[]
+
+  @@index([projectId], map: "stages_project_idx")
+  @@map("stages")
+}
+
+model Task {
+  id          String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId   String     @map("project_id") @db.Uuid
+  stageId     String?    @map("stage_id") @db.Uuid
+  domainId    String?    @map("domain_id") @db.Uuid
+  assigneeId  String?    @map("assignee_id") @db.Uuid
+  title       String
+  description String     @default("")
+  deadline    DateTime?  @map("deadline")
+  status      TaskStatus @default(todo)
+  sortOrder   Int        @default(0) @map("sort_order")
+  doneAt      DateTime?  @map("done_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "tasks_project_id_fkey")
+  stage   Stage?  @relation(fields: [stageId], references: [id], onDelete: SetNull, map: "tasks_stage_id_fkey")
+  domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "tasks_domain_id_fkey")
+  assignee User?  @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull, map: "tasks_assignee_id_fkey")
+
+  @@index([projectId], map: "tasks_project_idx")
+  @@index([assigneeId], map: "tasks_assignee_idx")
+  @@map("tasks")
+}
+
+model DomainGroup {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  name      String
+  sortOrder Int      @default(0) @map("sort_order")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "domain_groups_project_id_fkey")
+  domains Domain[]
+
+  @@index([projectId], map: "domain_groups_project_idx")
+  @@map("domain_groups")
+}
+
+model Domain {
+  id        String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String       @map("project_id") @db.Uuid
+  groupId   String       @map("group_id") @db.Uuid
+  ownerId   String?      @map("owner_id") @db.Uuid
+  name      String
+  status    DomainStatus @default(not_started)
+  sortOrder Int          @default(0) @map("sort_order")
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "domains_project_id_fkey")
+  group   DomainGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade, map: "domains_group_id_fkey")
+  owner   User?        @relation("DomainOwner", fields: [ownerId], references: [id], onDelete: SetNull, map: "domains_owner_id_fkey")
+  items   ChecklistItem[]
+  gaps         Gap[]
+  risks        Risk[]
+  requirements Requirement[]
+  quickWins    QuickWin[]
+  baselines    Baseline[]
+  tasks   Task[]
+  interviews Interview[]
+  facts   Fact[]
+  requests DataRequest[]
+  findings Finding[]
+
+  @@index([projectId], map: "domains_project_idx")
+  @@index([groupId], map: "domains_group_idx")
+  @@map("domains")
+}
+
+model ChecklistItem {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  domainId  String  @map("domain_id") @db.Uuid
+  text      String
+  done      Boolean @default(false)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade, map: "checklist_items_domain_id_fkey")
+
+  @@index([domainId], map: "checklist_items_domain_idx")
+  @@map("checklist_items")
+}
+
+model Guide {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "guides_project_id_fkey")
+  sections  GuideSection[]
+  interviews Interview[]
+
+  @@index([projectId], map: "guides_project_idx")
+  @@map("guides")
+}
+
+model GuideSection {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  guideId   String @map("guide_id") @db.Uuid
+  title     String
+  sortOrder Int    @default(0) @map("sort_order")
+
+  guide      Guide           @relation(fields: [guideId], references: [id], onDelete: Cascade, map: "guide_sections_guide_id_fkey")
+  questions  GuideQuestion[]
+
+  @@index([guideId], map: "guide_sections_guide_idx")
+  @@map("guide_sections")
+}
+
+model GuideQuestion {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sectionId String  @map("section_id") @db.Uuid
+  /// text | yn | scale | choice | multi
+  type      String
+  text      String
+  /// Варианты для choice/multi.
+  options   Json?   @default("[]")
+  /// Условный показ: вопрос виден только если ответ на вопрос showIfQuestionId равен showIfValue.
+  showIfQuestionId String? @map("show_if_question_id") @db.Uuid
+  showIfValue      String? @map("show_if_value")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  section      GuideSection       @relation(fields: [sectionId], references: [id], onDelete: Cascade, map: "guide_questions_section_id_fkey")
+  showIfSource GuideQuestion?    @relation("ShowIf", fields: [showIfQuestionId], references: [id], onDelete: SetNull, map: "guide_questions_show_if_fkey")
+  dependents   GuideQuestion[]   @relation("ShowIf")
+  answers      InterviewAnswer[]
+
+  @@index([sectionId], map: "guide_questions_section_idx")
+  @@map("guide_questions")
+}
+
+model Interview {
+  id             String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId      String          @map("project_id") @db.Uuid
+  domainId       String?         @map("domain_id") @db.Uuid
+  guideId        String?         @map("guide_id") @db.Uuid
+  scheduledAt    DateTime        @map("scheduled_at")
+  respondent     String
+  respondentRole String          @default("") @map("respondent_role")
+  status         InterviewStatus @default(planned)
+  notes          String          @default("")
+
+  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "interviews_project_id_fkey")
+  domain   Domain?            @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "interviews_domain_id_fkey")
+  guide    Guide?             @relation(fields: [guideId], references: [id], onDelete: SetNull, map: "interviews_guide_id_fkey")
+  answers  InterviewAnswer[]
+
+  @@index([projectId], map: "interviews_project_idx")
+  @@map("interviews")
+}
+
+model InterviewAnswer {
+  id          String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  interviewId String @map("interview_id") @db.Uuid
+  questionId  String @map("question_id") @db.Uuid
+  /// Ответ: строка, число или массив выбранных вариантов.
+  value       Json
+
+  interview Interview      @relation(fields: [interviewId], references: [id], onDelete: Cascade, map: "interview_answers_interview_fkey")
+  question  GuideQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade, map: "interview_answers_question_fkey")
+
+  @@unique([interviewId, questionId], map: "interview_answers_interview_question_key")
+  @@map("interview_answers")
+}
+
+model Fact {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  domainId    String?  @map("domain_id") @db.Uuid
+  authorId    String   @map("author_id") @db.Uuid
+  /// photo | file | note — поведение ввода.
+  kind        String
+  /// Ключ типа факта из справочника проекта (photo/file/note + кастомные).
+  typeKey     String   @default("note") @map("type_key")
+  title       String
+  description String   @default("")
+  shop        String   @default("")
+  factDate    DateTime @default(now()) @map("fact_date")
+  /// Приватный объект в хранилище (B2), если это фото или файл.
+  objectKey   String?  @map("object_key")
+  fileName    String?  @map("file_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "facts_project_id_fkey")
+  domain   Domain?  @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "facts_domain_id_fkey")
+  author   User     @relation("FactAuthor", fields: [authorId], references: [id], onDelete: Cascade, map: "facts_author_id_fkey")
+  findings Finding[]
+
+  @@index([projectId], map: "facts_project_idx")
+  @@index([domainId], map: "facts_domain_idx")
+  @@map("facts")
+}
+
+model DataRequest {
+  id         String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId  String        @map("project_id") @db.Uuid
+  domainId   String?       @map("domain_id") @db.Uuid
+  assigneeId String?       @map("assignee_id") @db.Uuid
+  what       String
+  why        String        @default("")
+  deadline   DateTime?     @map("deadline")
+  status     RequestStatus @default(requested)
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  receivedAt DateTime?     @map("received_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "data_requests_project_id_fkey")
+  domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "data_requests_domain_id_fkey")
+  assignee User?  @relation("RequestAssignee", fields: [assigneeId], references: [id], onDelete: SetNull, map: "data_requests_assignee_id_fkey")
+
+  @@index([projectId], map: "data_requests_project_idx")
+  @@map("data_requests")
+}
+
+model Finding {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  domainId    String?  @map("domain_id") @db.Uuid
+  factId      String?  @map("fact_id") @db.Uuid
+  ownerId     String?  @map("owner_id") @db.Uuid
+  title       String
+  description String   @default("")
+  category    String   @default("Процесс")
+  priority    String   @default("Средний")
+  /// Строка из справочника статусов проекта.
+  status      String   @default("registered")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "findings_project_id_fkey")
+  domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "findings_domain_id_fkey")
+  fact    Fact?   @relation(fields: [factId], references: [id], onDelete: SetNull, map: "findings_fact_id_fkey")
+  owner   User?   @relation("FindingOwner", fields: [ownerId], references: [id], onDelete: SetNull, map: "findings_owner_id_fkey")
+  gaps         Gap[]
+  requirements Requirement[]
+
+  @@index([projectId], map: "findings_project_idx")
+  @@map("findings")
+}
+
+model Process {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  name      String
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "processes_project_id_fkey")
+  steps   ProcessStep[]
+  schemes ProcessScheme[]
+
+  @@index([projectId], map: "processes_project_idx")
+  @@map("processes")
+}
+
+model ProcessStep {
+  id          String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  processId   String      @map("process_id") @db.Uuid
+  side        ProcessSide
+  title       String
+  actorRole   String      @default("") @map("actor_role")
+  /// Метки инструментов: Excel / 1С / бумага / …
+  tools       Json        @default("[]")
+  effect      String?
+  /// Куда переходит шаг AS-IS в TO-BE.
+  mapToStepId String?     @map("map_to_step_id") @db.Uuid
+  sortOrder   Int         @default(0) @map("sort_order")
+
+  process   Process       @relation(fields: [processId], references: [id], onDelete: Cascade, map: "process_steps_process_id_fkey")
+  mappedTo  ProcessStep?  @relation("StepMap", fields: [mapToStepId], references: [id], onDelete: SetNull, map: "process_steps_map_to_fkey")
+  mappedFrom ProcessStep[] @relation("StepMap")
+
+  @@index([processId], map: "process_steps_process_idx")
+  @@map("process_steps")
+}
+
+/// Схема процесса, выгруженная из StormBPMN (png/svg). Одна на сторону.
+model ProcessScheme {
+  id        String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  processId String      @map("process_id") @db.Uuid
+  side      ProcessSide
+  objectKey  String     @map("object_key")
+  fileName  String      @map("file_name")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  process Process @relation(fields: [processId], references: [id], onDelete: Cascade, map: "process_schemes_process_id_fkey")
+
+  @@unique([processId, side], map: "process_schemes_process_side_key")
+  @@map("process_schemes")
+}
+
+model ReportSection {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  title     String
+  /// HTML-тело раздела (вставки таблиц, текст).
+  body      String   @default("")
+  sortOrder Int      @default(0) @map("sort_order")
+
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "report_sections_project_id_fkey")
+  approvals  SectionApproval[]
+
+  @@index([projectId], map: "report_sections_project_idx")
+  @@map("report_sections")
+}
+
+model SectionApproval {
+  id        String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sectionId String           @map("section_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  decision  ApprovalDecision
+  comment   String           @default("")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  section ReportSection @relation(fields: [sectionId], references: [id], onDelete: Cascade, map: "section_approvals_section_id_fkey")
+  user    User          @relation("SectionApprover", fields: [userId], references: [id], onDelete: Cascade, map: "section_approvals_user_id_fkey")
+
+  @@unique([sectionId, userId], map: "section_approvals_section_user_key")
+  @@map("section_approvals")
+}
+
+model Comment {
+  id          String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId   String     @map("project_id") @db.Uuid
+  threadType  ThreadType @map("thread_type")
+  threadId    String     @map("thread_id") @db.Uuid
+  authorId    String     @map("author_id") @db.Uuid
+  body        String
+  needsAnswer Boolean    @default(false) @map("needs_answer")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "comments_project_id_fkey")
+  author  User    @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade, map: "comments_author_id_fkey")
+
+  @@index([projectId, threadType, threadId], map: "comments_thread_idx")
+  @@map("comments")
+}
+
+model ThreadRead {
+  id         String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId     String     @map("user_id") @db.Uuid
+  threadType ThreadType @map("thread_type")
+  threadId   String     @map("thread_id") @db.Uuid
+  lastReadAt DateTime   @default(now()) @map("last_read_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, map: "thread_reads_user_id_fkey")
+
+  @@unique([userId, threadType, threadId], map: "thread_reads_user_thread_key")
+  @@map("thread_reads")
+}
+
+model Gap {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  domainId    String?   @map("domain_id") @db.Uuid
+  findingId   String?   @map("finding_id") @db.Uuid
+  requirement String
+  kind        GapKind   @default(std)
+  status      GapStatus @default(open)
+  comment     String    @default("")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "gaps_project_id_fkey")
+  domain  Domain?  @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "gaps_domain_id_fkey")
+  finding Finding? @relation(fields: [findingId], references: [id], onDelete: SetNull, map: "gaps_finding_id_fkey")
+
+  @@index([projectId], map: "gaps_project_idx")
+  @@map("gaps")
+}
+
+model Risk {
+  id         String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId  String     @map("project_id") @db.Uuid
+  domainId   String?    @map("domain_id") @db.Uuid
+  ownerId    String?    @map("owner_id") @db.Uuid
+  title      String
+  /// Вероятность и влияние 1..5, критичность = произведение.
+  probability Int       @default(3)
+  impact      Int       @default(3)
+  status      RiskStatus @default(open)
+  mitigation  String    @default("")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "risks_project_id_fkey")
+  domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "risks_domain_id_fkey")
+  owner   User?   @relation("RiskOwner", fields: [ownerId], references: [id], onDelete: SetNull, map: "risks_owner_id_fkey")
+
+  @@index([projectId], map: "risks_project_idx")
+  @@map("risks")
+}
+
+model Requirement {
+  id        String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String          @map("project_id") @db.Uuid
+  domainId  String?         @map("domain_id") @db.Uuid
+  findingId String?         @map("finding_id") @db.Uuid
+  title     String
+  source    String          @default("")
+  moscow    MoscowPriority  @default(should)
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "requirements_project_id_fkey")
+  domain  Domain?  @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "requirements_domain_id_fkey")
+  finding Finding? @relation(fields: [findingId], references: [id], onDelete: SetNull, map: "requirements_finding_id_fkey")
+
+  @@index([projectId], map: "requirements_project_idx")
+  @@map("requirements")
+}
+
+model DecisionLog {
+  id           String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId    String         @map("project_id") @db.Uuid
+  title        String
+  rationale    String         @default("")
+  participants String         @default("")
+  status       DecisionStatus @default(active)
+  decidedAt    DateTime       @default(now()) @map("decided_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "decision_logs_project_id_fkey")
+
+  @@index([projectId], map: "decision_logs_project_idx")
+  @@map("decision_logs")
+}
+
+model Communication {
+  id          String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId   String            @map("project_id") @db.Uuid
+  title       String
+  kind        CommunicationKind @default(meeting)
+  participants String           @default("")
+  summary     String            @default("")
+  heldAt      DateTime          @default(now()) @map("held_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "communications_project_id_fkey")
+
+  @@index([projectId], map: "communications_project_idx")
+  @@map("communications")
+}
+
+model QuickWin {
+  id        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String         @map("project_id") @db.Uuid
+  domainId  String?        @map("domain_id") @db.Uuid
+  title     String
+  effect    String         @default("")
+  effort    String         @default("средний")
+  status    QuickWinStatus @default(suggested)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "quick_wins_project_id_fkey")
+  domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "quick_wins_domain_id_fkey")
+
+  @@index([projectId], map: "quick_wins_project_idx")
+  @@map("quick_wins")
+}
+
+model Baseline {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  domainId  String?  @map("domain_id") @db.Uuid
+  metric    String
+  value     String
+  unit      String   @default("")
+  comment   String   @default("")
+  source    String   @default("")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "baselines_project_id_fkey")
+  domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "baselines_domain_id_fkey")
+
+  @@index([projectId], map: "baselines_project_idx")
+  @@map("baselines")
+}
+
+/// Пользовательский реестр под специфику предприятия (оснастка, инструмент, партии…).
+model CustomRegistry {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  name        String
+  description String   @default("")
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "custom_registries_project_id_fkey")
+  fields   CustomField[]
+  statuses RegistryStatus[]
+  entries  RegistryEntry[]
+
+  @@index([projectId], map: "custom_registries_project_idx")
+  @@map("custom_registries")
+}
+
+/// Поле реестра: text | number | date | select | formula.
+model CustomField {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  registryId String @map("registry_id") @db.Uuid
+  key       String
+  name      String
+  type      String
+  /// Варианты для select.
+  options   Json?  @default("[]")
+  /// Для formula: { op: '+'|'-'|'*', a: {field|const, value}, b: {...} }.
+  formula   Json?
+  sortOrder Int    @default(0) @map("sort_order")
+
+  registry CustomRegistry @relation(fields: [registryId], references: [id], onDelete: Cascade, map: "custom_fields_registry_id_fkey")
+
+  @@unique([registryId, key], map: "custom_fields_registry_key_key")
+  @@map("custom_fields")
+}
+
+model RegistryStatus {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  registryId String @map("registry_id") @db.Uuid
+  name      String
+  /// Цвет чипа из палитры приложения (blue/green/red/amber/purple/gray).
+  color     String @default("blue")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  registry CustomRegistry  @relation(fields: [registryId], references: [id], onDelete: Cascade, map: "registry_statuses_registry_id_fkey")
+  entries  RegistryEntry[]
+
+  @@index([registryId], map: "registry_statuses_registry_idx")
+  @@map("registry_statuses")
+}
+
+model RegistryEntry {
+  id         String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  registryId String    @map("registry_id") @db.Uuid
+  statusId   String?   @map("status_id") @db.Uuid
+  /// Значения полей: { [fieldKey]: value }.
+  values     Json      @default("{}")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  registry CustomRegistry  @relation(fields: [registryId], references: [id], onDelete: Cascade, map: "registry_entries_registry_id_fkey")
+  status   RegistryStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull, map: "registry_entries_status_id_fkey")
+
+  @@index([registryId], map: "registry_entries_registry_idx")
+  @@map("registry_entries")
+}
+
+/// Шаблон проекта в библиотеке методик: снимок структуры (этапы, домены с чек-листами,
+/// гайды, разделы отчёта, справочники) без записей и прогресса.
+model ProjectTemplate {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name        String
+  description String   @default("")
+  payload     Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("project_templates")
+}
+
+/// Приглашение: код/ссылка для входа. Для сотрудников ОРДИКС — глобальная роль;
+/// для заказчика — роль участника конкретного проекта (projectId).
+model Invite {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code        String   @unique(map: "invites_code_key")
+  projectId   String?  @map("project_id") @db.Uuid
+  orgRole     OrgRole  @default(client) @map("org_role")
+  memberRole  MemberRole? @map("member_role")
+  note        String   @default("")
+  createdById String   @map("created_by_id") @db.Uuid
+  usedById    String?  @map("used_by_id") @db.Uuid
+  usedAt      DateTime? @map("used_at")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  createdBy User @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade, map: "invites_created_by_fkey")
+  usedBy    User? @relation("InviteUser", fields: [usedById], references: [id], onDelete: SetNull, map: "invites_used_by_fkey")
+
+  @@index([projectId], map: "invites_project_idx")
+  @@map("invites")
+}
