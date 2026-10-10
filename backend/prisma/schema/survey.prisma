@@ -568,6 +568,7 @@ model Comment {
   body        String
   needsAnswer Boolean    @default(false) @map("needs_answer")
   createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "comments_project_id_fkey")
   author  User    @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade, map: "comments_author_id_fkey")
@@ -655,6 +656,7 @@ model DecisionLog {
   participants String         @default("")
   status       DecisionStatus @default(active)
   decidedAt    DateTime       @default(now()) @map("decided_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "decision_logs_project_id_fkey")
 
@@ -670,6 +672,7 @@ model Communication {
   participants String           @default("")
   summary     String            @default("")
   heldAt      DateTime          @default(now()) @map("held_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "communications_project_id_fkey")
 
@@ -685,6 +688,7 @@ model QuickWin {
   effect    String         @default("")
   effort    String         @default("средний")
   status    QuickWinStatus @default(suggested)
+  createdAt DateTime       @default(now()) @map("created_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "quick_wins_project_id_fkey")
   domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "quick_wins_domain_id_fkey")
@@ -702,6 +706,7 @@ model Baseline {
   unit      String   @default("")
   comment   String   @default("")
   source    String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "baselines_project_id_fkey")
   domain  Domain? @relation(fields: [domainId], references: [id], onDelete: SetNull, map: "baselines_domain_id_fkey")

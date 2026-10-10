@@ -228,3 +228,41 @@ export type ProjectsRepository = {
 
   deleteChecklistItem(itemId: string): Promise<boolean>
 }
+
+// ============================================================
+// Шаблоны проектов (библиотека методик)
+// ============================================================
+
+export type TemplateRow = {
+  id: string
+  name: string
+  description: string
+  payload: unknown
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** Библиотека методик: CRUD шаблонов + разворачивание в проект + снимок проекта. */
+export type TemplatesRepository = {
+  listTemplates(): Promise<TemplateRow[]>
+
+  createTemplate(input: { name: string; description: string; payload: unknown }): Promise<TemplateRow>
+
+  findTemplateById(templateId: string): Promise<TemplateRow | null>
+
+  updateTemplate(
+    templateId: string,
+    data: Partial<Pick<TemplateRow, 'name' | 'description' | 'payload'>>,
+  ): Promise<TemplateRow | null>
+
+  deleteTemplate(templateId: string): Promise<boolean>
+
+  /** Разворачивает payload в новый проект (одна транзакция); creator — участник-менеджер. */
+  createProjectFromTemplate(
+    principal: { id: string; orgRole: string },
+    input: { templateId: string; name: string; client: string; city: string; shops: string[] },
+  ): Promise<{ id: string }>
+
+  /** Снимок структуры проекта как payload шаблона (без записей и прогресса). */
+  buildPayloadFromProject(projectId: string): Promise<unknown>
+}

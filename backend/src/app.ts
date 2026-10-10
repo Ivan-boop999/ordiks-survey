@@ -15,8 +15,12 @@ import { errorResponse, handleError, validationErrorHook } from './http/errors'
 import { createReadinessProbe } from './http/readiness'
 import { createAuthSecurity, createFixedWindowRateLimit } from './http/security'
 import { createAuthModule, type AuthHttpEnv } from './modules/auth'
+import { createCollaborationModule } from './modules/collaboration'
 import { createInvitesModule } from './modules/invites'
+import { createProcessesModule } from './modules/processes'
 import { createProjectsModule } from './modules/projects'
+import { createRegistriesModule } from './modules/registries'
+import { createReportingModule } from './modules/reporting'
 import { createSurveyModule } from './modules/survey'
 import { createUploadsModule } from './modules/uploads'
 import { createUsersModule } from './modules/users'
@@ -82,6 +86,32 @@ export function createApp({
     guard: projects.guard,
     storage: storage.storage,
     jwtSecret: env.JWT_SECRET,
+  })
+  // Волна B3: процессы AS-IS/TO-BE со схемами StormBPMN, отчёт с визами и автовставками,
+  // комментарии и центр уведомлений, аналитические и пользовательские реестры — все на том же
+  // guard проектов.
+  const processes = createProcessesModule({
+    backgroundTasks,
+    db: prisma,
+    requireAuth: auth.requireAuth,
+    guard: projects.guard,
+    storage: storage.storage,
+    jwtSecret: env.JWT_SECRET,
+  })
+  const reporting = createReportingModule({
+    db: prisma,
+    requireAuth: auth.requireAuth,
+    guard: projects.guard,
+  })
+  const collaboration = createCollaborationModule({
+    db: prisma,
+    requireAuth: auth.requireAuth,
+    guard: projects.guard,
+  })
+  const registries = createRegistriesModule({
+    db: prisma,
+    requireAuth: auth.requireAuth,
+    guard: projects.guard,
   })
   const app = new OpenAPIHono<AuthHttpEnv>({
     defaultHook: validationErrorHook,
@@ -167,6 +197,9 @@ export function createApp({
     app.route('/api', routes)
   }
   for (const routes of survey.routes) {
+    app.route('/api', routes)
+  }
+  for (const routes of [...processes.routes, ...reporting.routes, ...collaboration.routes, ...registries.routes]) {
     app.route('/api', routes)
   }
   app.route('/api', invites.routes)
