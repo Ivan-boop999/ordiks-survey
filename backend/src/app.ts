@@ -17,6 +17,7 @@ import { createAuthSecurity, createFixedWindowRateLimit } from './http/security'
 import { createAuthModule, type AuthHttpEnv } from './modules/auth'
 import { createInvitesModule } from './modules/invites'
 import { createProjectsModule } from './modules/projects'
+import { createSurveyModule } from './modules/survey'
 import { createUploadsModule } from './modules/uploads'
 import { createUsersModule } from './modules/users'
 import { createRateLimitStores } from './rate-limit'
@@ -72,6 +73,16 @@ export function createApp({
   })
   const projects = createProjectsModule({ db: prisma, requireAuth: auth.requireAuth })
   const invites = createInvitesModule({ db: prisma, requireAuth: auth.requireAuth })
+  // Survey-сущности (факты/гайды/интервью/запросы/находки) делят guard проектов: одна точка
+  // правды о том, кто видит проект и кто входит в команду.
+  const survey = createSurveyModule({
+    backgroundTasks,
+    db: prisma,
+    requireAuth: auth.requireAuth,
+    guard: projects.guard,
+    storage: storage.storage,
+    jwtSecret: env.JWT_SECRET,
+  })
   const app = new OpenAPIHono<AuthHttpEnv>({
     defaultHook: validationErrorHook,
   })
@@ -153,6 +164,9 @@ export function createApp({
   app.route('/api/admin', users.adminRoutes)
   app.route('/api/uploads', uploads.routes)
   for (const routes of projects.routes) {
+    app.route('/api', routes)
+  }
+  for (const routes of survey.routes) {
     app.route('/api', routes)
   }
   app.route('/api', invites.routes)
