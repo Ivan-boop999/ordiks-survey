@@ -3,6 +3,7 @@ import {
   acceptInviteResponseSchema,
   checklistItemSchema,
   createChecklistItemRequestSchema,
+  createDataRequestRequestSchema,
   createDomainGroupRequestSchema,
   createDomainRequestSchema,
   createProjectRequestSchema,
@@ -28,6 +29,7 @@ import {
   tasksQuerySchema,
   tasksResponseSchema,
   updateChecklistItemRequestSchema,
+  updateDataRequestRequestSchema,
   updateDataRequestStatusRequestSchema,
   updateDomainGroupRequestSchema,
   updateDomainRequestSchema,
@@ -36,6 +38,7 @@ import {
   updateTaskRequestSchema,
   type AcceptInviteRequest,
   type CreateChecklistItemRequest,
+  type CreateDataRequestRequest,
   type CreateDomainGroupRequest,
   type CreateDomainRequest,
   type CreateProjectRequest,
@@ -46,6 +49,7 @@ import {
   type InterviewsQuery,
   type TasksQuery,
   type UpdateChecklistItemRequest,
+  type UpdateDataRequestRequest,
   type UpdateDataRequestStatusRequest,
   type UpdateDomainGroupRequest,
   type UpdateDomainRequest,
@@ -393,4 +397,34 @@ export function acceptInvite(input: AcceptInviteRequest, http = new HttpClient()
     method: 'POST',
     body: acceptInviteRequestSchema.parse(input),
   })
+}
+
+// ============================================================
+// Запросы данных: создание/правка/удаление (команда)
+// ============================================================
+
+export function createDataRequest(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateDataRequestRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/requests`, dataRequestSchema, {
+    method: 'POST',
+    body: createDataRequestRequestSchema.parse(input),
+  })
+}
+
+export function updateDataRequest(
+  transport: AuthenticatedTransport,
+  requestId: string,
+  input: UpdateDataRequestRequest,
+) {
+  return transport.request(`/api/requests/${id(requestId)}`, dataRequestSchema, {
+    method: 'PATCH',
+    body: updateDataRequestRequestSchema.parse(input),
+  })
+}
+
+export function deleteDataRequest(transport: AuthenticatedTransport, requestId: string) {
+  return transport.request(`/api/requests/${id(requestId)}`, noContent, { method: 'DELETE' })
 }

@@ -37,7 +37,9 @@ export async function compressFactPhoto(file: File): Promise<PhotoCompressionRes
   canvas.width = width
   canvas.height = height
   canvas.getContext('2d')?.drawImage(bitmap, 0, 0, width, height)
-  if (typeof bitmap.close === 'function') bitmap.close()
+  if (typeof (bitmap as { close?: () => void }).close === 'function') {
+    ;(bitmap as { close?: () => void }).close!()
+  }
 
   let quality = 0.85
   let blob = await canvasToJpeg(canvas, quality)
@@ -172,10 +174,9 @@ const factUploadTicketResponseSchema = z
   .strict()
 
 export class FactUploadError extends Error {
-  constructor(
-    readonly reason: 'size-changed' | 'transfer-failed',
-    message: string,
-  ) {
+  readonly reason: 'size-changed' | 'transfer-failed'
+  constructor(reason: 'size-changed' | 'transfer-failed', message: string) {
     super(message)
+    this.reason = reason
   }
 }

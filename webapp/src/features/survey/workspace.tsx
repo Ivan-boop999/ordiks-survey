@@ -13,6 +13,7 @@ import {
   type SurveySection,
 } from './model'
 import { ComingSoonPage } from './pages/ComingSoonPage'
+import { RequestsPage } from './pages/RequestsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DomainsPage } from './pages/DomainsPage'
 import { PassportPage } from './pages/PassportPage'
@@ -28,7 +29,6 @@ const COMING_SOON_SECTIONS = new Set([
   'interviews',
   'guides',
   'facts',
-  'requests',
   'findings',
   'processes',
   'analytics',
@@ -166,6 +166,7 @@ export function SurveySectionPage() {
     case 'guides':
     case 'facts':
     case 'requests':
+      return <RequestsPage />
     case 'findings':
     case 'processes':
     case 'analytics':

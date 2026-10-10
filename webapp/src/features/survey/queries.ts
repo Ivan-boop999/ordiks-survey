@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query'
 import type {
   CreateChecklistItemRequest,
+  CreateDataRequestRequest,
   CreateDomainGroupRequest,
   CreateDomainRequest,
   CreateProjectRequest,
@@ -16,6 +17,7 @@ import type {
   StageDto,
   TaskStatus,
   UpdateChecklistItemRequest,
+  UpdateDataRequestRequest,
   UpdateDomainGroupRequest,
   UpdateDomainRequest,
   UpdateProjectRequest,
@@ -28,12 +30,14 @@ import type { AuthenticatedTransport } from '@/platform/api'
 import {
   archiveProject,
   createChecklistItem,
+  createDataRequest,
   createDomain,
   createDomainGroup,
   createProject,
   createStage,
   createTask,
   deleteChecklistItem,
+  deleteDataRequest,
   deleteDomain,
   deleteDomainGroup,
   deleteStage,
@@ -48,6 +52,7 @@ import {
   listStages,
   listTasks,
   updateChecklistItem,
+  updateDataRequest,
   updateDataRequestStatus,
   updateDomain,
   updateDomainGroup,
@@ -416,6 +421,28 @@ export function useUpdateRequestStatusMutation(projectId: string) {
       transport,
       { requestId, status }: { requestId: string; status: RequestStatus },
     ) => updateDataRequestStatus(transport, requestId, { status }),
+    () => [surveyQueryKeys.requests(projectId)],
+  )
+}
+
+export function useCreateDataRequestMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateDataRequestRequest) => createDataRequest(transport, projectId, input),
+    () => [surveyQueryKeys.requests(projectId)],
+  )
+}
+
+export function useUpdateDataRequestMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { requestId, ...input }: { requestId: string } & UpdateDataRequestRequest) =>
+      updateDataRequest(transport, requestId, input),
+    () => [surveyQueryKeys.requests(projectId)],
+  )
+}
+
+export function useDeleteDataRequestMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, requestId: string) => deleteDataRequest(transport, requestId),
     () => [surveyQueryKeys.requests(projectId)],
   )
 }
