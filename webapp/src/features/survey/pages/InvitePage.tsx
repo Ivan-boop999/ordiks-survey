@@ -7,7 +7,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth'
 import { ApiRequestError } from '@/platform/api'
-import { PasswordInput } from '@/features/auth/components/PasswordInput'
+import { PasswordInput } from '@/features/auth'
 import { acceptInvite } from '../api'
 import { validateInviteForm } from '../invite-model'
 
@@ -80,7 +80,7 @@ export function InvitePage() {
         <form
           className="grid gap-5 rounded-xl border bg-card p-6 shadow-sm"
           data-testid="invite-form"
-          onSubmit={(event) => void submit(event)}
+          onSubmit={(event: React.ChangeEvent<HTMLInputElement>) => void submit(event)}
         >
           <div className="grid gap-1 text-center">
             <Typography as="h1" variant="h3">

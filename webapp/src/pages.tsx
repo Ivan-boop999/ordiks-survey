@@ -20,7 +20,7 @@ import {
   useAuth,
 } from '@/features/auth'
 import { homePathForRole, safeReturnPath } from '@/features/navigation'
-import { InvitePage } from '@/features/survey/pages/InvitePage'
+import { InvitePage } from '@/features/survey'
 import { UserHome, UserProfile, UserSettings } from '@/features/users'
 
 export function HomePage() {

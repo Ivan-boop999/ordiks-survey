@@ -19,6 +19,18 @@ export {
   StagesPage,
 } from './pages/Exports'
 export { ComingSoonPage } from './pages/ComingSoonPage'
+export { InvitePage } from './pages/InvitePage'
+export {
+  RequestsPage,
+  FindingsPage,
+  FactsPage,
+  InterviewsPage,
+  GuidesPage,
+  SettingsPage,
+  ProcessesPage,
+  AnalyticsPage,
+  ReportPage,
+} from './pages/Exports'
 export { SurveyShell } from './shell/SurveyShell'
 export { useSurveyProject } from './use-survey-project'
 export {

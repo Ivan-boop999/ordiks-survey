@@ -75,7 +75,7 @@ const surveyIndexRoute = createRoute({
 const surveyProjectsRoute = createRoute({
   getParentRoute: () => surveyWorkspaceRoute,
   path: '/survey/projects',
-  component: lazyRouteComponent(() => import('@/features/survey/pages/Exports'), 'ProjectsPage'),
+  component: lazyRouteComponent(() => import('@/features/survey'), 'ProjectsPage'),
 })
 
 const surveyProjectRoute = createRoute({

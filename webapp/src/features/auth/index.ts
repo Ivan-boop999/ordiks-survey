@@ -16,3 +16,5 @@ export { authQueryKeys, sessionQueryKeys } from './queries'
 export { useAuth } from './use-auth'
 export type { ValidationErrors } from './components/form-model'
 export type { AuthContextValue } from './context'
+
+export { PasswordInput } from './components/PasswordInput'

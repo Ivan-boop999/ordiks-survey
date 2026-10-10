@@ -1,5 +1,4 @@
 import { Typography } from '@/components/typography'
-import { initialsOf } from '@/features/survey/model'
 import { cn } from '@/lib/utils'
 
 const PALETTE = [
@@ -21,6 +20,10 @@ function colorFor(seed: string) {
 }
 
 /** Круглый аватар с инициалами (прототип: .avatar). */
+function initialsOf(name: string | null | undefined): string {
+  return (name ?? '?').split(/s+/).slice(0, 2).map((word) => word[0] ?? '').join('').toUpperCase()
+}
+
 export function UserAvatar({
   name,
   email,
