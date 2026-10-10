@@ -24,6 +24,7 @@ const userSummarySelect = {
   email: true,
   displayName: true,
   role: true,
+  orgRole: true,
   createdAt: true,
 } as const
 

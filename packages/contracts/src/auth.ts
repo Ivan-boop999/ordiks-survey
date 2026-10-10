@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { orgRoleSchema } from './survey'
+
 const displayNameSchema = z
   .union([z.string().trim().min(2).max(80), z.literal('')])
   .optional()
@@ -22,6 +24,8 @@ export const userSchema = z.object({
   email: emailSchema,
   displayName: z.string().nullable(),
   role: userRoleSchema,
+  // Роль в организации ОРДИКС: команда (owner/manager/analyst) или client (доступ по членству).
+  orgRole: orgRoleSchema,
   createdAt: z.string().datetime(),
 })
 

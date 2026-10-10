@@ -1,4 +1,4 @@
-import type { UserDto, UserRole } from '@ordiks-survey/contracts'
+import type { OrgRole, UserDto, UserRole } from '@ordiks-survey/contracts'
 
 export type AuthUserRecord = {
   id: string
@@ -6,6 +6,7 @@ export type AuthUserRecord = {
   passwordHash: string | null
   displayName: string | null
   role: UserRole
+  orgRole: OrgRole
   createdAt: Date
 }
 
@@ -19,6 +20,7 @@ export function toBaseUserDto(user: AuthUserRecord): UserDto {
     email: user.email,
     displayName: user.displayName,
     role: user.role,
+    orgRole: user.orgRole,
     createdAt: user.createdAt.toISOString(),
   }
 }

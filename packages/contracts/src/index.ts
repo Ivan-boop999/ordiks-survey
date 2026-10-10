@@ -1,4 +1,7 @@
 export * from './auth'
 export * from './errors'
+export * from './invites'
+export * from './projects'
+export * from './survey'
 export * from './uploads'
 export * from './users'

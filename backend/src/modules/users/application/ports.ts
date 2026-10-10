@@ -1,9 +1,12 @@
 import type {
+  AdminUsersQuery,
+  OrgRole,
+  UserRole,
+} from '@ordiks-survey/contracts'
+import type {
   AdminDashboardResponse,
   AdminUserSummary,
-  AdminUsersQuery,
   AdminUsersResponse,
-  UserRole,
 } from '@ordiks-survey/contracts'
 
 export type UserRecord = {
@@ -11,6 +14,7 @@ export type UserRecord = {
   email: string
   displayName: string | null
   role: UserRole
+  orgRole: OrgRole
   createdAt: Date
 }
 

@@ -9,6 +9,7 @@ const user = {
   passwordHash: 'password-hash',
   displayName: null,
   role: 'user' as const,
+  orgRole: 'client' as const,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
 }
 
@@ -21,6 +22,7 @@ const projectUser: ProjectUser = async (record) => ({
   email: record.email,
   displayName: record.displayName,
   role: record.role,
+  orgRole: record.orgRole,
   createdAt: record.createdAt.toISOString(),
 })
 

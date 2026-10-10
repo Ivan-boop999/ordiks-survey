@@ -128,3 +128,5 @@ function buildAuthService({
 export type { AuthHttpEnv }
 export type { LogoutCleanup, ProjectUser } from './application/ports'
 export type { AuthenticatedPrincipal } from './domain/user'
+// Инвайты создают аккаунты с тем же хешированием паролей, что и вход по паролю.
+export { hashPassword, verifyPassword } from './infrastructure/passwords'

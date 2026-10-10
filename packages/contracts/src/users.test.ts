@@ -14,6 +14,7 @@ const user = {
   email: 'user@example.com',
   displayName: 'User',
   role: 'user',
+  orgRole: 'client',
   createdAt: '2026-07-20T00:00:00.000Z',
 } as const
 
