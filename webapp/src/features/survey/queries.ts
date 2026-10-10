@@ -4,23 +4,49 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { guidesResponseSchema } from '@ordiks-survey/contracts'
 import type {
   CreateChecklistItemRequest,
   BulkUpdateFindingsRequest,
   CreateDataRequestRequest,
   CreateFactRequest,
   CreateFindingRequest,
+  CreateGapRequest,
+  CreateGuideQuestionRequest,
+  CreateGuideRequest,
+  CreateGuideSectionRequest,
+  GuideQuestionDto,
+  GuideSectionDto,
   CreateInterviewRequest,
+  CreateProcessRequest,
+  CreateProcessStepRequest,
+  CreateReportSectionRequest,
+  CreateRequirementRequest,
+  CreateRiskRequest,
+  MarkThreadReadRequest,
+  ReportInsertRequest,
   SaveInterviewAnswersRequest,
+  SectionApprovalRequest,
   UpdateInterviewRequest,
   UpdateFactRequest,
   UpdateFindingRequest,
+  UpdateGapRequest,
+  UpdateGuideQuestionRequest,
+  UpdateGuideRequest,
+  UpdateGuideSectionRequest,
+  UpdateProcessRequest,
+  UpdateProcessStepRequest,
+  UpdateReportSectionRequest,
+  UpdateRequirementRequest,
+  UpdateRiskRequest,
   CreateDomainGroupRequest,
   CreateDomainRequest,
+  CreateInviteRequest,
+  CreateProjectFromTemplateRequest,
+  CreateProjectMemberRequest,
   CreateProjectRequest,
   CreateStageRequest,
   CreateTaskRequest,
+  MemberRole,
   ProjectSummary,
   RequestStatus,
   StageDto,
@@ -35,23 +61,59 @@ import type {
 } from '@ordiks-survey/contracts'
 
 import { uploadFactFile } from './fact-upload'
+import { uploadProcessScheme } from './process-scheme-upload'
 import { useAuth } from '@/features/auth'
 import type { AuthenticatedTransport } from '@/platform/api'
 import {
+  addProjectMember,
+  approveReportSection,
   archiveProject,
   bulkUpdateFindings,
   createChecklistItem,
   createDataRequest,
   createFact,
   createFinding,
+  createGap,
+  createGuide,
+  createGuideQuestion,
+  createGuideSection,
   createInterview,
+  createInvite,
+  createProcess,
+  createProcessStep,
+  createProjectFromTemplate,
+  createReportSection,
+  createRequirement,
+  createRisk,
+  deactivateInvite,
   deleteInterview,
+  deleteProcess,
+  deleteProcessStep,
+  deleteProcessScheme,
+  deleteReportSection,
+  deleteGap,
+  deleteGuide,
+  deleteGuideQuestion,
+  deleteGuideSection,
+  deleteRequirement,
+  deleteRisk,
   saveInterviewAnswers,
+  duplicateGuide,
+  insertReportFragment,
   updateInterview,
   deleteFact,
   deleteFinding,
   updateFact,
   updateFinding,
+  updateGap,
+  updateGuide,
+  updateGuideQuestion,
+  updateGuideSection,
+  updateProcess,
+  updateProcessStep,
+  updateReportSection,
+  updateRequirement,
+  updateRisk,
   createDomain,
   createDomainGroup,
   createProject,
@@ -64,21 +126,35 @@ import {
   deleteStage,
   deleteTask,
   getProject,
+  getProjectReport,
   listDomainGroups,
   listDataRequests,
   listFacts,
   listFindings,
+  listGaps,
+  listGuides,
   listInterviews,
+  listInvites,
+  listNotifications,
+  listProcesses,
   listProjectMembers,
+  listProjectTemplates,
   listProjects,
+  listRegistries,
+  listRequirements,
+  listRisks,
   listStages,
   listTasks,
+  markThreadRead,
+  removeProjectMember,
+  reorderProcessSteps,
   updateChecklistItem,
   updateDataRequest,
   updateDataRequestStatus,
   updateDomain,
   updateDomainGroup,
   updateProject,
+  updateProjectMemberRole,
   updateStage,
   updateTask,
 } from './api'
@@ -95,6 +171,16 @@ export const surveyQueryKeys = {
   requests: (projectId: string) => [...surveyQueryKeys.project(projectId), 'requests'] as const,
   findings: (projectId: string) => [...surveyQueryKeys.project(projectId), 'findings'] as const,
   interviews: (projectId: string) => [...surveyQueryKeys.project(projectId), 'interviews'] as const,
+  processes: (projectId: string) => [...surveyQueryKeys.project(projectId), 'processes'] as const,
+  risks: (projectId: string) => [...surveyQueryKeys.project(projectId), 'risks'] as const,
+  gaps: (projectId: string) => [...surveyQueryKeys.project(projectId), 'gaps'] as const,
+  requirements: (projectId: string) => [...surveyQueryKeys.project(projectId), 'requirements'] as const,
+  registries: (projectId: string) => [...surveyQueryKeys.project(projectId), 'registries'] as const,
+  report: (projectId: string) => [...surveyQueryKeys.project(projectId), 'report'] as const,
+  guides: (projectId: string) => [...surveyQueryKeys.project(projectId), 'guides'] as const,
+  invites: () => [...surveyQueryKeys.all, 'invites'] as const,
+  projectTemplates: () => [...surveyQueryKeys.all, 'project-templates'] as const,
+  notifications: () => [...surveyQueryKeys.all, 'notifications'] as const,
 }
 
 // ============================================================
@@ -591,16 +677,534 @@ export function useGuidesQuery(projectId: string) {
 
 function guidesQueryOptions(transport: AuthenticatedTransport, projectId: string) {
   return queryOptions({
-    queryKey: [...surveyQueryKeys.project(projectId), 'guides'] as const,
+    queryKey: surveyQueryKeys.guides(projectId),
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       listGuides(transport, projectId, { signal }),
   })
 }
 
-export function listGuides(
-  transport: AuthenticatedTransport,
-  projectId: string,
-  options: { signal?: AbortSignal } = {},
-) {
-  return transport.request(`/api/projects/${projectId}/guides`, guidesResponseSchema, options)
+// ============================================================
+// Процессы AS-IS / TO-BE
+// ============================================================
+
+export function processesQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.processes(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listProcesses(transport, projectId, { signal }),
+  })
+}
+
+export function useProcessesQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(processesQueryOptions(auth.transport, projectId))
+}
+
+export function useCreateProcessMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateProcessRequest) => createProcess(transport, projectId, input),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+export function useUpdateProcessMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { processId, input }: { processId: string; input: UpdateProcessRequest }) =>
+      updateProcess(transport, processId, input),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+export function useDeleteProcessMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, processId: string) => deleteProcess(transport, processId),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+export function useCreateProcessStepMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { processId, input }: { processId: string; input: CreateProcessStepRequest }) =>
+      createProcessStep(transport, processId, input),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+export function useUpdateProcessStepMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { stepId, input }: { stepId: string; input: UpdateProcessStepRequest }) =>
+      updateProcessStep(transport, stepId, input),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+export function useDeleteProcessStepMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, stepId: string) => deleteProcessStep(transport, stepId),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+export function useReorderProcessStepsMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { processId, side, ids }: { processId: string; side: 'asis' | 'tobe'; ids: string[] },
+    ) => reorderProcessSteps(transport, processId, { side, ids }),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+export function useUploadProcessSchemeMutation(projectId: string) {
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      processId,
+      side,
+      file,
+    }: {
+      processId: string
+      side: 'asis' | 'tobe'
+      file: File
+    }) => uploadProcessScheme(auth.transport, processId, side, file),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.processes(projectId) }),
+  })
+}
+
+export function useDeleteProcessSchemeMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { processId, side }: { processId: string; side: 'asis' | 'tobe' }) =>
+      deleteProcessScheme(transport, processId, side),
+    () => [surveyQueryKeys.processes(projectId)],
+  )
+}
+
+// ============================================================
+// Аналитика: риски, GAP, требования
+// ============================================================
+
+export function risksQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.risks(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listRisks(transport, projectId, { signal }),
+  })
+}
+
+export function useRisksQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(risksQueryOptions(auth.transport, projectId))
+}
+
+export function useCreateRiskMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateRiskRequest) => createRisk(transport, projectId, input),
+    () => [surveyQueryKeys.risks(projectId)],
+  )
+}
+
+export function useUpdateRiskMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { riskId, input }: { riskId: string; input: UpdateRiskRequest }) =>
+      updateRisk(transport, riskId, input),
+    () => [surveyQueryKeys.risks(projectId)],
+  )
+}
+
+export function useDeleteRiskMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, riskId: string) => deleteRisk(transport, riskId),
+    () => [surveyQueryKeys.risks(projectId)],
+  )
+}
+
+export function gapsQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.gaps(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listGaps(transport, projectId, { signal }),
+  })
+}
+
+export function useGapsQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(gapsQueryOptions(auth.transport, projectId))
+}
+
+export function useCreateGapMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateGapRequest) => createGap(transport, projectId, input),
+    () => [surveyQueryKeys.gaps(projectId)],
+  )
+}
+
+export function useUpdateGapMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { gapId, input }: { gapId: string; input: UpdateGapRequest }) =>
+      updateGap(transport, gapId, input),
+    () => [surveyQueryKeys.gaps(projectId)],
+  )
+}
+
+export function useDeleteGapMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, gapId: string) => deleteGap(transport, gapId),
+    () => [surveyQueryKeys.gaps(projectId)],
+  )
+}
+
+export function requirementsQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.requirements(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      listRequirements(transport, projectId, { signal }),
+  })
+}
+
+export function useRequirementsQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(requirementsQueryOptions(auth.transport, projectId))
+}
+
+export function useCreateRequirementMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateRequirementRequest) => createRequirement(transport, projectId, input),
+    () => [surveyQueryKeys.requirements(projectId)],
+  )
+}
+
+export function useUpdateRequirementMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { requirementId, input }: { requirementId: string; input: UpdateRequirementRequest }) =>
+      updateRequirement(transport, requirementId, input),
+    () => [surveyQueryKeys.requirements(projectId)],
+  )
+}
+
+export function useDeleteRequirementMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, requirementId: string) => deleteRequirement(transport, requirementId),
+    () => [surveyQueryKeys.requirements(projectId)],
+  )
+}
+
+export function registriesQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.registries(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      listRegistries(transport, projectId, { signal }),
+  })
+}
+
+export function useRegistriesQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(registriesQueryOptions(auth.transport, projectId))
+}
+
+// ============================================================
+// Отчёт: разделы, автовставки, визы
+// ============================================================
+
+export function reportQueryOptions(transport: AuthenticatedTransport, projectId: string) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.report(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      getProjectReport(transport, projectId, { signal }),
+  })
+}
+
+export function useReportQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery(reportQueryOptions(auth.transport, projectId))
+}
+
+export function useCreateReportSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateReportSectionRequest) =>
+      createReportSection(transport, projectId, input),
+    () => [surveyQueryKeys.report(projectId)],
+  )
+}
+
+export function useUpdateReportSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { sectionId, input }: { sectionId: string; input: UpdateReportSectionRequest },
+    ) => updateReportSection(transport, sectionId, input),
+    () => [surveyQueryKeys.report(projectId)],
+  )
+}
+
+/** Перестановка соседних разделов: свап sortOrder, как у этапов. */
+export function useMoveReportSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { sectionId, sortOrder }: { sectionId: string; sortOrder: number },
+    ) => updateReportSection(transport, sectionId, { sortOrder }),
+    () => [surveyQueryKeys.report(projectId)],
+  )
+}
+
+export function useDeleteReportSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, sectionId: string) => deleteReportSection(transport, sectionId),
+    () => [surveyQueryKeys.report(projectId)],
+  )
+}
+
+export function useApproveSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { sectionId, input }: { sectionId: string; input: SectionApprovalRequest }) =>
+      approveReportSection(transport, sectionId, input),
+    () => [surveyQueryKeys.report(projectId)],
+  )
+}
+
+export function useInsertReportFragmentMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: ReportInsertRequest) => insertReportFragment(transport, projectId, input),
+    () => [surveyQueryKeys.report(projectId)],
+  )
+}
+
+// ============================================================
+// Центр уведомлений
+// ============================================================
+
+export function notificationsQueryOptions(transport: AuthenticatedTransport) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.notifications(),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listNotifications(transport, { signal }),
+    refetchInterval: 60_000,
+  })
+}
+
+export function useNotificationsQuery(enabled = true) {
+  const auth = useAuth()
+  return useQuery({ ...notificationsQueryOptions(auth.transport), enabled })
+}
+
+export function useMarkThreadReadMutation() {
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: MarkThreadReadRequest) => markThreadRead(auth.transport, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.notifications() }),
+  })
+}
+
+// ============================================================
+// Гайды: конструктор — CRUD, дублирование, перестановка
+// ============================================================
+
+export function useCreateGuideMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateGuideRequest) => createGuide(transport, projectId, input),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useUpdateGuideMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { guideId, input }: { guideId: string; input: UpdateGuideRequest }) =>
+      updateGuide(transport, guideId, input),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useDeleteGuideMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, guideId: string) => deleteGuide(transport, guideId),
+    () => [surveyQueryKeys.guides(projectId), surveyQueryKeys.interviews(projectId)],
+  )
+}
+
+export function useDuplicateGuideMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, guideId: string) => duplicateGuide(transport, guideId),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useCreateGuideSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { guideId, input }: { guideId: string; input: CreateGuideSectionRequest }) =>
+      createGuideSection(transport, guideId, input),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useUpdateGuideSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { sectionId, input }: { sectionId: string; input: UpdateGuideSectionRequest },
+    ) => updateGuideSection(transport, sectionId, input),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useDeleteGuideSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, sectionId: string) => deleteGuideSection(transport, sectionId),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+/** Перестановка соседних секций: сервер хранит целочисленный sortOrder, свапаем значения. */
+export function useMoveGuideSectionMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      {
+        sections,
+        index,
+        direction,
+      }: { sections: GuideSectionDto[]; index: number; direction: -1 | 1 },
+    ) => {
+      const target = sections[index]
+      const neighbor = sections[index + direction]
+      if (!target || !neighbor) return Promise.resolve(null)
+      return Promise.all([
+        updateGuideSection(transport, target.id, { sortOrder: neighbor.sortOrder }),
+        updateGuideSection(transport, neighbor.id, { sortOrder: target.sortOrder }),
+      ])
+    },
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useCreateGuideQuestionMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { sectionId, input }: { sectionId: string; input: CreateGuideQuestionRequest },
+    ) => createGuideQuestion(transport, sectionId, input),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useUpdateGuideQuestionMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { questionId, input }: { questionId: string; input: UpdateGuideQuestionRequest },
+    ) => updateGuideQuestion(transport, questionId, input),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+export function useDeleteGuideQuestionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, questionId: string) => deleteGuideQuestion(transport, questionId),
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+/** Перестановка соседних вопросов внутри секции: свап sortOrder. */
+export function useMoveGuideQuestionMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      {
+        questions,
+        index,
+        direction,
+      }: { questions: GuideQuestionDto[]; index: number; direction: -1 | 1 },
+    ) => {
+      const target = questions[index]
+      const neighbor = questions[index + direction]
+      if (!target || !neighbor) return Promise.resolve(null)
+      return Promise.all([
+        updateGuideQuestion(transport, target.id, { sortOrder: neighbor.sortOrder }),
+        updateGuideQuestion(transport, neighbor.id, { sortOrder: target.sortOrder }),
+      ])
+    },
+    () => [surveyQueryKeys.guides(projectId)],
+  )
+}
+
+// ============================================================
+// Участники проекта: добавление, роль, удаление
+// ============================================================
+
+export function useAddProjectMemberMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateProjectMemberRequest) => addProjectMember(transport, projectId, input),
+    () => [surveyQueryKeys.members(projectId), surveyQueryKeys.project(projectId)],
+  )
+}
+
+export function useUpdateProjectMemberMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { memberId, role }: { memberId: string; role: MemberRole },
+    ) => updateProjectMemberRole(transport, projectId, memberId, role),
+    () => [surveyQueryKeys.members(projectId), surveyQueryKeys.project(projectId)],
+  )
+}
+
+export function useRemoveProjectMemberMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, memberId: string) => removeProjectMember(transport, projectId, memberId),
+    () => [surveyQueryKeys.members(projectId), surveyQueryKeys.project(projectId)],
+  )
+}
+
+// ============================================================
+// Приглашения: список, создание, деактивация
+// ============================================================
+
+export function invitesQueryOptions(transport: AuthenticatedTransport) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.invites(),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listInvites(transport, { signal }),
+  })
+}
+
+export function useInvitesQuery(enabled = true) {
+  const auth = useAuth()
+  return useQuery({ ...invitesQueryOptions(auth.transport), enabled })
+}
+
+export function useCreateInviteMutation() {
+  return useSurveyMutation(
+    (transport, input: CreateInviteRequest) => createInvite(transport, input),
+    () => [surveyQueryKeys.invites()],
+  )
+}
+
+export function useDeactivateInviteMutation() {
+  return useSurveyMutation(
+    (transport, inviteId: string) => deactivateInvite(transport, inviteId),
+    () => [surveyQueryKeys.invites()],
+  )
+}
+
+// ============================================================
+// Библиотека методик: шаблоны проектов
+// ============================================================
+
+export function projectTemplatesQueryOptions(transport: AuthenticatedTransport) {
+  return queryOptions({
+    queryKey: surveyQueryKeys.projectTemplates(),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      listProjectTemplates(transport, { signal }),
+  })
+}
+
+export function useProjectTemplatesQuery(enabled = true) {
+  const auth = useAuth()
+  return useQuery({ ...projectTemplatesQueryOptions(auth.transport), enabled })
+}
+
+export function useCreateProjectFromTemplateMutation() {
+  return useSurveyMutation(
+    (transport, input: CreateProjectFromTemplateRequest) =>
+      createProjectFromTemplate(transport, input),
+    () => [surveyQueryKeys.projects()],
+  )
 }

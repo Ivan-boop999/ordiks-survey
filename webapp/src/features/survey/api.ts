@@ -51,6 +51,51 @@ import {
   updateProjectRequestSchema,
   updateStageRequestSchema,
   updateTaskRequestSchema,
+  createProcessRequestSchema,
+  createProcessStepRequestSchema,
+  processSchema,
+  processSchemeDownloadSchema,
+  processesResponseSchema,
+  reorderProcessStepsRequestSchema,
+  updateProcessRequestSchema,
+  updateProcessStepRequestSchema,
+  createGapRequestSchema,
+  createRequirementRequestSchema,
+  createRiskRequestSchema,
+  gapSchema,
+  gapsResponseSchema,
+  requirementSchema,
+  requirementsResponseSchema,
+  riskSchema,
+  risksResponseSchema,
+  updateGapRequestSchema,
+  updateRequirementRequestSchema,
+  updateRiskRequestSchema,
+  registriesResponseSchema,
+  createReportSectionRequestSchema,
+  projectReportSchema,
+  reportInsertRequestSchema,
+  reportInsertResponseSchema,
+  reportSectionSchema,
+  sectionApprovalRequestSchema,
+  updateReportSectionRequestSchema,
+  markThreadReadRequestSchema,
+  notificationsResponseSchema,
+  createGuideRequestSchema,
+  updateGuideRequestSchema,
+  createGuideSectionRequestSchema,
+  updateGuideSectionRequestSchema,
+  createGuideQuestionRequestSchema,
+  updateGuideQuestionRequestSchema,
+  guideSchema,
+  createProjectMemberRequestSchema,
+  updateProjectMemberRequestSchema,
+  projectMemberSchema,
+  invitesResponseSchema,
+  createInviteRequestSchema,
+  inviteSchema,
+  projectTemplatesResponseSchema,
+  createProjectFromTemplateRequestSchema,
   type AcceptInviteRequest,
   type CreateChecklistItemRequest,
   type CreateDataRequestRequest,
@@ -80,6 +125,34 @@ import {
   type UpdateProjectRequest,
   type UpdateStageRequest,
   type UpdateTaskRequest,
+  type CreateProcessRequest,
+  type CreateProcessStepRequest,
+  type ProcessSide,
+  type ProcessSchemeDownload,
+  type ReorderProcessStepsRequest,
+  type UpdateProcessRequest,
+  type UpdateProcessStepRequest,
+  type CreateGapRequest,
+  type CreateRequirementRequest,
+  type CreateRiskRequest,
+  type UpdateGapRequest,
+  type UpdateRequirementRequest,
+  type UpdateRiskRequest,
+  type CreateReportSectionRequest,
+  type ReportInsertRequest,
+  type SectionApprovalRequest,
+  type UpdateReportSectionRequest,
+  type MarkThreadReadRequest,
+  type CreateGuideRequest,
+  type UpdateGuideRequest,
+  type CreateGuideSectionRequest,
+  type UpdateGuideSectionRequest,
+  type CreateGuideQuestionRequest,
+  type UpdateGuideQuestionRequest,
+  type CreateProjectMemberRequest,
+  type CreateInviteRequest,
+  type MemberRole,
+  type CreateProjectFromTemplateRequest,
 } from '@ordiks-survey/contracts'
 import { z } from 'zod'
 
@@ -587,4 +660,456 @@ export function saveInterviewAnswers(
     saveInterviewAnswersResponseSchema,
     { method: 'PUT', body: saveInterviewAnswersRequestSchema.parse(input) },
   )
+}
+
+// ============================================================
+// Процессы AS-IS / TO-BE: шаги, порядок, схемы StormBPMN (загрузка — process-scheme-upload.ts)
+// ============================================================
+
+export function listProcesses(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/processes`,
+    processesResponseSchema,
+    options,
+  )
+}
+
+export function createProcess(transport: AuthenticatedTransport, projectId: string, input: CreateProcessRequest) {
+  return transport.request(`/api/projects/${id(projectId)}/processes`, processSchema, {
+    method: 'POST',
+    body: createProcessRequestSchema.parse(input),
+  })
+}
+
+export function updateProcess(
+  transport: AuthenticatedTransport,
+  processId: string,
+  input: UpdateProcessRequest,
+) {
+  return transport.request(`/api/processes/${id(processId)}`, processSchema, {
+    method: 'PATCH',
+    body: updateProcessRequestSchema.parse(input),
+  })
+}
+
+export function deleteProcess(transport: AuthenticatedTransport, processId: string) {
+  return transport.request(`/api/processes/${id(processId)}`, noContent, { method: 'DELETE' })
+}
+
+export function createProcessStep(
+  transport: AuthenticatedTransport,
+  processId: string,
+  input: CreateProcessStepRequest,
+) {
+  return transport.request(`/api/processes/${id(processId)}/steps`, processSchema, {
+    method: 'POST',
+    body: createProcessStepRequestSchema.parse(input),
+  })
+}
+
+export function reorderProcessSteps(
+  transport: AuthenticatedTransport,
+  processId: string,
+  input: ReorderProcessStepsRequest,
+) {
+  return transport.request(`/api/processes/${id(processId)}/steps/reorder`, processSchema, {
+    method: 'POST',
+    body: reorderProcessStepsRequestSchema.parse(input),
+  })
+}
+
+export function updateProcessStep(
+  transport: AuthenticatedTransport,
+  stepId: string,
+  input: UpdateProcessStepRequest,
+) {
+  return transport.request(`/api/process-steps/${id(stepId)}`, processSchema, {
+    method: 'PATCH',
+    body: updateProcessStepRequestSchema.parse(input),
+  })
+}
+
+export function deleteProcessStep(transport: AuthenticatedTransport, stepId: string) {
+  return transport.request(`/api/process-steps/${id(stepId)}`, noContent, { method: 'DELETE' })
+}
+
+/** Схема лежит в приватном хранилище: превью получает по короткоживущей подписанной ссылке. */
+export function processSchemeDownloadUrl(
+  transport: AuthenticatedTransport,
+  processId: string,
+  side: ProcessSide,
+): Promise<ProcessSchemeDownload> {
+  return transport.request(
+    `/api/processes/${id(processId)}/schemes/${side}/download`,
+    processSchemeDownloadSchema,
+  )
+}
+
+export function deleteProcessScheme(
+  transport: AuthenticatedTransport,
+  processId: string,
+  side: ProcessSide,
+) {
+  return transport.request(`/api/processes/${id(processId)}/schemes/${side}`, processSchema, {
+    method: 'DELETE',
+  })
+}
+
+// ============================================================
+// Аналитика: риски, GAP, требования
+// ============================================================
+
+export function listRisks(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${id(projectId)}/risks`, risksResponseSchema, options)
+}
+
+export function createRisk(transport: AuthenticatedTransport, projectId: string, input: CreateRiskRequest) {
+  return transport.request(`/api/projects/${id(projectId)}/risks`, riskSchema, {
+    method: 'POST',
+    body: createRiskRequestSchema.parse(input),
+  })
+}
+
+export function updateRisk(
+  transport: AuthenticatedTransport,
+  riskId: string,
+  input: UpdateRiskRequest,
+) {
+  return transport.request(`/api/risks/${id(riskId)}`, riskSchema, {
+    method: 'PATCH',
+    body: updateRiskRequestSchema.parse(input),
+  })
+}
+
+export function deleteRisk(transport: AuthenticatedTransport, riskId: string) {
+  return transport.request(`/api/risks/${id(riskId)}`, noContent, { method: 'DELETE' })
+}
+
+export function listGaps(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${id(projectId)}/gaps`, gapsResponseSchema, options)
+}
+
+export function createGap(transport: AuthenticatedTransport, projectId: string, input: CreateGapRequest) {
+  return transport.request(`/api/projects/${id(projectId)}/gaps`, gapSchema, {
+    method: 'POST',
+    body: createGapRequestSchema.parse(input),
+  })
+}
+
+export function updateGap(
+  transport: AuthenticatedTransport,
+  gapId: string,
+  input: UpdateGapRequest,
+) {
+  return transport.request(`/api/gaps/${id(gapId)}`, gapSchema, {
+    method: 'PATCH',
+    body: updateGapRequestSchema.parse(input),
+  })
+}
+
+export function deleteGap(transport: AuthenticatedTransport, gapId: string) {
+  return transport.request(`/api/gaps/${id(gapId)}`, noContent, { method: 'DELETE' })
+}
+
+export function listRequirements(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/requirements`,
+    requirementsResponseSchema,
+    options,
+  )
+}
+
+export function createRequirement(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateRequirementRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/requirements`, requirementSchema, {
+    method: 'POST',
+    body: createRequirementRequestSchema.parse(input),
+  })
+}
+
+export function updateRequirement(
+  transport: AuthenticatedTransport,
+  requirementId: string,
+  input: UpdateRequirementRequest,
+) {
+  return transport.request(`/api/requirements/${id(requirementId)}`, requirementSchema, {
+    method: 'PATCH',
+    body: updateRequirementRequestSchema.parse(input),
+  })
+}
+
+export function deleteRequirement(transport: AuthenticatedTransport, requirementId: string) {
+  return transport.request(`/api/requirements/${id(requirementId)}`, noContent, {
+    method: 'DELETE',
+  })
+}
+
+/** Реестры проекта — для автовставки «Реестр рисков» и последующей волны конструктора. */
+export function listRegistries(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${id(projectId)}/registries`, registriesResponseSchema, options)
+}
+
+// ============================================================
+// Отчёт: разделы, автовставки, визы
+// ============================================================
+
+export function getProjectReport(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${id(projectId)}/report`, projectReportSchema, options)
+}
+
+export function insertReportFragment(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: ReportInsertRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/report/insert`, reportInsertResponseSchema, {
+    method: 'POST',
+    body: reportInsertRequestSchema.parse(input),
+  })
+}
+
+export function createReportSection(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateReportSectionRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/report/sections`, reportSectionSchema, {
+    method: 'POST',
+    body: createReportSectionRequestSchema.parse(input),
+  })
+}
+
+export function updateReportSection(
+  transport: AuthenticatedTransport,
+  sectionId: string,
+  input: UpdateReportSectionRequest,
+) {
+  return transport.request(`/api/report-sections/${id(sectionId)}`, reportSectionSchema, {
+    method: 'PATCH',
+    body: updateReportSectionRequestSchema.parse(input),
+  })
+}
+
+export function deleteReportSection(transport: AuthenticatedTransport, sectionId: string) {
+  return transport.request(`/api/report-sections/${id(sectionId)}`, noContent, { method: 'DELETE' })
+}
+
+export function approveReportSection(
+  transport: AuthenticatedTransport,
+  sectionId: string,
+  input: SectionApprovalRequest,
+) {
+  return transport.request(`/api/report-sections/${id(sectionId)}/approval`, reportSectionSchema, {
+    method: 'PUT',
+    body: sectionApprovalRequestSchema.parse(input),
+  })
+}
+
+// ============================================================
+// Центр уведомлений: непрочитанные комментарии и отметка треда прочитанным
+// ============================================================
+
+export function listNotifications(
+  transport: AuthenticatedTransport,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request('/api/me/notifications', notificationsResponseSchema, options)
+}
+
+export function markThreadRead(
+  transport: AuthenticatedTransport,
+  input: MarkThreadReadRequest,
+) {
+  return transport.request('/api/me/notifications/read', noContent, {
+    method: 'POST',
+    body: markThreadReadRequestSchema.parse(input),
+  })
+}
+
+// ============================================================
+// Гайды: конструктор — CRUD секций/вопросов, дублирование
+// ============================================================
+
+export function createGuide(transport: AuthenticatedTransport, projectId: string, input: CreateGuideRequest) {
+  return transport.request(`/api/projects/${id(projectId)}/guides`, guideSchema, {
+    method: 'POST',
+    body: createGuideRequestSchema.parse(input),
+  })
+}
+
+export function updateGuide(transport: AuthenticatedTransport, guideId: string, input: UpdateGuideRequest) {
+  return transport.request(`/api/guides/${id(guideId)}`, guideSchema, {
+    method: 'PATCH',
+    body: updateGuideRequestSchema.parse(input),
+  })
+}
+
+export function deleteGuide(transport: AuthenticatedTransport, guideId: string) {
+  return transport.request(`/api/guides/${id(guideId)}`, noContent, { method: 'DELETE' })
+}
+
+export function duplicateGuide(transport: AuthenticatedTransport, guideId: string) {
+  return transport.request(`/api/guides/${id(guideId)}/duplicate`, guideSchema, { method: 'POST' })
+}
+
+export function createGuideSection(
+  transport: AuthenticatedTransport,
+  guideId: string,
+  input: CreateGuideSectionRequest,
+) {
+  return transport.request(`/api/guides/${id(guideId)}/sections`, guideSchema, {
+    method: 'POST',
+    body: createGuideSectionRequestSchema.parse(input),
+  })
+}
+
+export function updateGuideSection(
+  transport: AuthenticatedTransport,
+  sectionId: string,
+  input: UpdateGuideSectionRequest,
+) {
+  return transport.request(`/api/guide-sections/${id(sectionId)}`, guideSchema, {
+    method: 'PATCH',
+    body: updateGuideSectionRequestSchema.parse(input),
+  })
+}
+
+export function deleteGuideSection(transport: AuthenticatedTransport, sectionId: string) {
+  return transport.request(`/api/guide-sections/${id(sectionId)}`, noContent, { method: 'DELETE' })
+}
+
+export function createGuideQuestion(
+  transport: AuthenticatedTransport,
+  sectionId: string,
+  input: CreateGuideQuestionRequest,
+) {
+  return transport.request(`/api/guide-sections/${id(sectionId)}/questions`, guideSchema, {
+    method: 'POST',
+    body: createGuideQuestionRequestSchema.parse(input),
+  })
+}
+
+export function updateGuideQuestion(
+  transport: AuthenticatedTransport,
+  questionId: string,
+  input: UpdateGuideQuestionRequest,
+) {
+  return transport.request(`/api/guide-questions/${id(questionId)}`, guideSchema, {
+    method: 'PATCH',
+    body: updateGuideQuestionRequestSchema.parse(input),
+  })
+}
+
+export function deleteGuideQuestion(transport: AuthenticatedTransport, questionId: string) {
+  return transport.request(`/api/guide-questions/${id(questionId)}`, noContent, { method: 'DELETE' })
+}
+
+// ============================================================
+// Участники проекта: добавление существующего, роль, удаление
+// ============================================================
+
+export function addProjectMember(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateProjectMemberRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/members`, projectMemberSchema, {
+    method: 'POST',
+    body: createProjectMemberRequestSchema.parse(input),
+  })
+}
+
+export function updateProjectMemberRole(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  memberId: string,
+  role: MemberRole,
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/members/${id(memberId)}`,
+    projectMemberSchema,
+    { method: 'PATCH', body: updateProjectMemberRequestSchema.parse({ role }) },
+  )
+}
+
+export function removeProjectMember(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  memberId: string,
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/members/${id(memberId)}`,
+    noContent,
+    { method: 'DELETE' },
+  )
+}
+
+// ============================================================
+// Приглашения (управление; принятие — acceptInvite выше)
+// ============================================================
+
+export function listInvites(
+  transport: AuthenticatedTransport,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request('/api/invites', invitesResponseSchema, options)
+}
+
+export function createInvite(transport: AuthenticatedTransport, input: CreateInviteRequest) {
+  return transport.request('/api/invites', inviteSchema, {
+    method: 'POST',
+    body: createInviteRequestSchema.parse(input),
+  })
+}
+
+export function deactivateInvite(transport: AuthenticatedTransport, inviteId: string) {
+  return transport.request(`/api/invites/${id(inviteId)}`, inviteSchema, { method: 'DELETE' })
+}
+
+// ============================================================
+// Библиотека методик: шаблоны проектов
+// ============================================================
+
+export function listProjectTemplates(
+  transport: AuthenticatedTransport,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request('/api/project-templates', projectTemplatesResponseSchema, options)
+}
+
+export function createProjectFromTemplate(
+  transport: AuthenticatedTransport,
+  input: CreateProjectFromTemplateRequest,
+) {
+  return transport.request('/api/projects/from-template', projectDetailSchema, {
+    method: 'POST',
+    body: createProjectFromTemplateRequestSchema.parse(input),
+  })
 }
