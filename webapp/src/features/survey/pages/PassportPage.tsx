@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { SectionCard, StatusChip, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, SectionCard, StatusChip, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,6 +29,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useSurveyProject } from '../use-survey-project'
 import {
   displayNameOf,
+  formatDateRu,
   MEMBER_ROLE_LABELS,
   ORG_ROLE_LABELS,
   PROJECT_STATUS_META,
@@ -92,7 +93,7 @@ export function PassportPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip color={statusMeta.color}>{statusMeta.label}</StatusChip>
-        <StatusChip outline>создан {new Date(detail.createdAt).toLocaleDateString('ru-RU')}</StatusChip>
+        <StatusChip outline>создан {formatDateRu(detail.createdAt)}</StatusChip>
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -246,6 +247,7 @@ function PassportEditDialog({
     detail.settings.passportValues,
   )
   const [error, setError] = useState<string | null>(null)
+  const [confirmingStatus, setConfirmingStatus] = useState<FindingStatusItem | null>(null)
   const [statusDraft, setStatusDraft] = useState<{ name: string; color: ChipColor }>({
     name: '',
     color: 'gray',
@@ -422,7 +424,7 @@ function PassportEditDialog({
                   <StatusChip color={status.color}>{status.name}</StatusChip>
                   <Button
                     aria-label={`Удалить статус «${status.name}»`}
-                    onClick={() => setStatuses((prev) => prev.filter((item) => item.id !== status.id))}
+                    onClick={() => setConfirmingStatus(status)}
                     size="icon-xs"
                     variant="ghost"
                   >
@@ -514,6 +516,19 @@ function PassportEditDialog({
             </Typography>
           ) : null}
         </FieldGroup>
+        <ConfirmDeleteDialog
+          description="Если статус используется в находках, сервер отклонит сохранение — покажем его ошибку."
+          onConfirm={() => {
+            if (!confirmingStatus) return
+            setStatuses((prev) => prev.filter((item) => item.id !== confirmingStatus.id))
+            setConfirmingStatus(null)
+          }}
+          onOpenChange={(open) => {
+            if (!open) setConfirmingStatus(null)
+          }}
+          open={confirmingStatus !== null}
+          title={confirmingStatus ? `Удалить статус «${confirmingStatus.name}»?` : ''}
+        />
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} variant="outline">
             Отмена
