@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ProgressBar, StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, ProgressBar, StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { useSurveyProject } from '../use-survey-project'
 import { toggleChecklistDone } from '../dashboard-model'
 import {
@@ -121,13 +122,14 @@ export function DomainsPage() {
         </div>
       )}
 
-      {canEdit && editingDomain ? (
+      {editingDomain ? (
         <ChecklistDialog
           domain={editingDomain}
           onOpenChange={(open) => {
             if (!open) setEditingDomain(null)
           }}
           open={editingDomain !== null}
+          readOnly={!canEdit}
         />
       ) : null}
       {canEdit ? (
@@ -224,6 +226,7 @@ function DomainGroupCard({
   const renameGroup = useUpdateDomainGroupMutation(projectId)
   const deleteGroup = useDeleteDomainGroupMutation(projectId)
   const [renaming, setRenaming] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const { detail } = useSurveyProject()
 
   const ownerOf = (ownerId: string | null) =>
@@ -251,19 +254,7 @@ function DomainGroupCard({
               </Button>
               <Button
                 aria-label={`Удалить группу «${group.name}»`}
-                disabled={deleteGroup.isPending}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Удалить группу «${group.name}» вместе с ${group.domains.length} доменами?`,
-                    )
-                  ) {
-                    deleteGroup.mutate(group.id, {
-                      onSuccess: () => toast.success('Группа удалена'),
-                      onError: (error) => toast.error(error.message),
-                    })
-                  }
-                }}
+                onClick={() => setConfirmingDelete(true)}
                 size="icon-sm"
                 variant="ghost"
               >
@@ -320,6 +311,22 @@ function DomainGroupCard({
           rename={renameGroup}
         />
       ) : null}
+      <ConfirmDeleteDialog
+        description={`Будут удалены домены группы (${group.domains.length}) вместе с чек-листами.`}
+        onConfirm={() =>
+          deleteGroup.mutate(group.id, {
+            onSuccess: () => {
+              toast.success('Группа удалена')
+              setConfirmingDelete(false)
+            },
+            onError: (error) => toast.error(error.message),
+          })
+        }
+        onOpenChange={setConfirmingDelete}
+        open={confirmingDelete}
+        pending={deleteGroup.isPending}
+        title={`Удалить группу «${group.name}»?`}
+      />
     </section>
   )
 }
@@ -387,15 +394,18 @@ function RenameGroupDialog({
   )
 }
 
-/** Модалка домена: чек-лист с галочками, добавлением, перестановкой и удалением пунктов. */
+/** Модалка домена: чек-лист с галочками, добавлением, перестановкой и удалением пунктов.
+ * Роли без права редактирования видят чек-лист в режиме просмотра (клиент — прогресс покрытия). */
 export function ChecklistDialog({
   domain,
   onOpenChange,
   open,
+  readOnly = false,
 }: {
   domain: DomainDto
   onOpenChange: (open: boolean) => void
   open: boolean
+  readOnly?: boolean
 }) {
   const { projectId } = useSurveyProject()
   const createItem = useCreateChecklistItemMutation(projectId)
@@ -404,6 +414,7 @@ export function ChecklistDialog({
   const deleteDomain = useDeleteDomainMutation(projectId)
   const renameDomain = useUpdateDomainMutation(projectId)
   const [newItemText, setNewItemText] = useState('')
+  const [confirmingDomainDelete, setConfirmingDomainDelete] = useState(false)
   // Оптимистичный чек-лист: галочка встаёт мгновенно, серверный ответ подтягивает статус домена.
   // Синхронизация — паттерном «корректировка состояния при рендере» (без эффекта): новый массив
   // от react-query заменяет локальную копию, пока пользователь не начал новое переключение.
@@ -463,6 +474,7 @@ export function ChecklistDialog({
           <DialogTitle data-testid="checklist-domain-name">{domain.name}</DialogTitle>
           <DialogDescription>
             {progress.done} из {progress.total} пунктов выполнено · статус пересчитывается автоматически
+            {readOnly ? ' · просмотр (без права редактирования)' : ''}
           </DialogDescription>
         </DialogHeader>
 
@@ -476,7 +488,7 @@ export function ChecklistDialog({
               <input
                 aria-label={item.text}
                 checked={item.done}
-                disabled={updateItem.isPending}
+                disabled={readOnly || updateItem.isPending}
                 onChange={(event) => toggleItem(item.id, event.target.checked)}
                 type="checkbox"
               />
@@ -489,6 +501,7 @@ export function ChecklistDialog({
               >
                 {item.text}
               </Typography>
+              {!readOnly ? (
               <div className="flex shrink-0 items-center">
                 <Button
                   aria-label={`Пункт «${item.text}» выше`}
@@ -522,15 +535,19 @@ export function ChecklistDialog({
                   <HugeiconsIcon className="text-red-600" icon={TrashIcon} strokeWidth={2} />
                 </Button>
               </div>
+              ) : null}
             </div>
           ))}
           {items.length === 0 ? (
             <Typography as="p" tone="muted" variant="bodySm">
-              Чек-лист пуст — добавьте пункты, по которым идёт покрытие домена.
+              {readOnly
+                ? 'Чек-лист пока пуст.'
+                : 'Чек-лист пуст — добавьте пункты, по которым идёт покрытие домена.'}
             </Typography>
           ) : null}
         </div>
 
+        {!readOnly ? (
         <form
           className="flex items-end gap-2"
           onSubmit={(event) => {
@@ -552,21 +569,13 @@ export function ChecklistDialog({
             Добавить
           </Button>
         </form>
+        ) : null}
 
         <DialogFooter className="items-center sm:justify-between">
+          {!readOnly ? (
+          <>
           <Button
-            disabled={deleteDomain.isPending}
-            onClick={() => {
-              if (window.confirm(`Удалить домен «${domain.name}»?`)) {
-                deleteDomain.mutate(domain.id, {
-                  onSuccess: () => {
-                    toast.success('Домен удалён')
-                    onOpenChange(false)
-                  },
-                  onError: (error) => toast.error(error.message),
-                })
-              }
-            }}
+            onClick={() => setConfirmingDomainDelete(true)}
             size="sm"
             variant="ghost"
           >
@@ -579,7 +588,29 @@ export function ChecklistDialog({
               Закрыть
             </Button>
           </div>
+          </>
+          ) : (
+            <Button className="sm:ml-auto" onClick={() => onOpenChange(false)} variant="outline">
+              Закрыть
+            </Button>
+          )}
         </DialogFooter>
+        <ConfirmDeleteDialog
+          description="Прогресс покрытия домена будет удалён вместе с чек-листом."
+          onConfirm={() =>
+            deleteDomain.mutate(domain.id, {
+              onSuccess: () => {
+                toast.success('Домен удалён')
+                onOpenChange(false)
+              },
+              onError: (error) => toast.error(error.message),
+            })
+          }
+          onOpenChange={setConfirmingDomainDelete}
+          open={confirmingDomainDelete}
+          pending={deleteDomain.isPending}
+          title={`Удалить домен «${domain.name}»?`}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -759,9 +790,10 @@ function AddDomainDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="domain-checklist">Чек-лист (по одному пункту в строке)</FieldLabel>
-            <Input
+            <Textarea
               id="domain-checklist"
               onChange={(event) => setChecklist(event.target.value)}
+              rows={4}
               value={checklist}
             />
           </Field>
