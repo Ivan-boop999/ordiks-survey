@@ -6,9 +6,11 @@ import {
   findingStatusMeta,
   isOverdue,
   isSectionAllowed,
+  parseDateLocal,
   priorityMeta,
   sectionsForViewRole,
   sectionPath,
+  toDateInputValue,
   viewRoleFor,
 } from '../src/features/survey/model'
 
@@ -101,3 +103,17 @@ test('default project prefers the last used active project, then the first activ
 expect(teamUser.orgRole).toBe('owner')
 expect(clientLead.memberRole).toBe('client_lead')
 expect(observer.memberRole).toBe('observer')
+
+test('parseDateLocal строит локальную полночь (даты не сдвигаются на день)', () => {
+  const date = parseDateLocal('2026-10-07')
+  expect(date.getFullYear()).toBe(2026)
+  expect(date.getMonth()).toBe(9)
+  expect(date.getDate()).toBe(7)
+  expect(date.getHours()).toBe(0)
+})
+
+test('toDateInputValue использует локальные компоненты даты', () => {
+  const date = new Date(2026, 9, 7, 23, 30)
+  expect(toDateInputValue(date)).toBe('2026-10-07')
+  expect(toDateInputValue(null)).toBe('')
+})
