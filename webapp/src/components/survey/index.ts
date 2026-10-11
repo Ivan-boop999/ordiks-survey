@@ -5,3 +5,9 @@ export { KpiCard } from './KpiCard'
 export { SectionCard, SurveyEmptyState } from './SectionCard'
 export { UserAvatar } from './UserAvatar'
 export { ConfirmDeleteDialog } from './ConfirmDeleteDialog'
+export {
+  SurveyCardsSkeleton,
+  SurveyKpiSkeleton,
+  SurveyListSkeleton,
+  SurveyTableSkeleton,
+} from './SurveySkeletons'

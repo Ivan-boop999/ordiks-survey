@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ConfirmDeleteDialog, ProgressBar, StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, ProgressBar, StatusChip, SurveyCardsSkeleton, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -67,9 +67,7 @@ export function ProjectsPage() {
       />
 
       {projectsQuery.isPending ? (
-        <Typography as="p" tone="muted" variant="bodySm">
-          Загружаем проекты…
-        </Typography>
+        <SurveyCardsSkeleton cards={3} />
       ) : projectsQuery.isError ? (
         <Typography as="p" className="text-red-600" role="alert" variant="bodySm">
           Не удалось загрузить проекты. Попробуйте обновить страницу.

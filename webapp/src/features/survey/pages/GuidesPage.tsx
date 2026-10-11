@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyCardsSkeleton, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -87,9 +87,7 @@ export function GuidesPage() {
       />
 
       {guidesQuery.isPending ? (
-        <Typography as="p" tone="muted" variant="bodySm">
-          Загружаем гайды…
-        </Typography>
+        <SurveyCardsSkeleton cards={3} />
       ) : guidesQuery.isError ? (
         <Typography as="p" className="text-red-600" role="alert" variant="bodySm">
           Не удалось загрузить гайды. Попробуйте обновить страницу.

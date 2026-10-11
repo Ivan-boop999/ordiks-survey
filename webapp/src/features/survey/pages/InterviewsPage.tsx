@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, SurveyTableSkeleton } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -104,9 +104,7 @@ export function InterviewsPage() {
       </div>
 
       {interviewsQuery.isPending ? (
-        <Typography as="p" tone="muted" variant="bodySm">
-          Загружаем…
-        </Typography>
+        <SurveyTableSkeleton />
       ) : filtered.length === 0 ? (
         <SurveyEmptyState
           action={

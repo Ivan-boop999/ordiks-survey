@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyCardsSkeleton, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -137,9 +137,7 @@ export function FactsPage() {
       </div>
 
       {factsQuery.isPending ? (
-        <Typography as="p" tone="muted" variant="bodySm">
-          Загружаем факты…
-        </Typography>
+        <SurveyCardsSkeleton />
       ) : filtered.length === 0 ? (
         <SurveyEmptyState
           action={

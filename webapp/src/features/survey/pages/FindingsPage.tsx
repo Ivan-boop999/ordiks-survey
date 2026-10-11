@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, SurveyTableSkeleton, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -234,9 +234,7 @@ export function FindingsPage() {
       </div>
 
       {findingsQuery.isPending ? (
-        <Typography as="p" tone="muted" variant="bodySm">
-          Загружаем находки…
-        </Typography>
+        <SurveyTableSkeleton />
       ) : filtered.length === 0 ? (
         search ? (
           <SurveyEmptyState

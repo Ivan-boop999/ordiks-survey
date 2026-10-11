@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, SurveyListSkeleton, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -132,9 +132,7 @@ export function RequestsPage() {
       </div>
 
       {requestsQuery.isPending ? (
-        <Typography as="p" tone="muted" variant="bodySm">
-          Загружаем запросы…
-        </Typography>
+        <SurveyListSkeleton />
       ) : filtered.length === 0 ? (
         <SurveyEmptyState
           action={
