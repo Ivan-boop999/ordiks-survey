@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { CommentThread } from '../components/CommentThread'
 import { formatDateRu, REQUEST_STATUS_META, toDateInputValue } from '../model'
 import {
   useCreateDataRequestMutation,
@@ -344,7 +345,7 @@ function RequestDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{request ? 'Запрос данных' : 'Новый запрос данных'}</DialogTitle>
           <DialogDescription>
@@ -407,6 +408,9 @@ function RequestDialog({
             />
           </Field>
         </FieldGroup>
+        {request ? (
+          <CommentThread projectId={projectId} threadId={request.id} threadType="request" />
+        ) : null}
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} variant="ghost">
             Отмена

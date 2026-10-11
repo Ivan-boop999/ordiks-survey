@@ -19,10 +19,20 @@ import type {
   CreateInterviewRequest,
   CreateProcessRequest,
   CreateProcessStepRequest,
+  CreateRegistryRequest,
+  CreateRegistryEntryRequest,
+  CreateRegistryFieldRequest,
+  CreateRegistryStatusRequest,
+  RegistryImportRequest,
   CreateReportSectionRequest,
   CreateRequirementRequest,
   CreateRiskRequest,
+  CreateDecisionRequest,
+  CreateCommunicationRequest,
+  CreateQuickWinRequest,
+  CreateBaselineRequest,
   MarkThreadReadRequest,
+  RegistryEntriesQuery,
   ReportInsertRequest,
   SaveInterviewAnswersRequest,
   SectionApprovalRequest,
@@ -35,9 +45,17 @@ import type {
   UpdateGuideSectionRequest,
   UpdateProcessRequest,
   UpdateProcessStepRequest,
+  UpdateRegistryRequest,
+  UpdateRegistryEntryRequest,
+  UpdateRegistryFieldRequest,
+  UpdateRegistryStatusRequest,
   UpdateReportSectionRequest,
   UpdateRequirementRequest,
   UpdateRiskRequest,
+  UpdateDecisionRequest,
+  UpdateCommunicationRequest,
+  UpdateQuickWinRequest,
+  UpdateBaselineRequest,
   CreateDomainGroupRequest,
   CreateDomainRequest,
   CreateInviteRequest,
@@ -51,6 +69,7 @@ import type {
   RequestStatus,
   StageDto,
   TaskStatus,
+  ThreadType,
   UpdateChecklistItemRequest,
   UpdateDataRequestRequest,
   UpdateDomainGroupRequest,
@@ -70,6 +89,7 @@ import {
   archiveProject,
   bulkUpdateFindings,
   createChecklistItem,
+  createComment,
   createDataRequest,
   createFact,
   createFinding,
@@ -82,9 +102,17 @@ import {
   createProcess,
   createProcessStep,
   createProjectFromTemplate,
+  createRegistry,
+  createRegistryEntry,
+  createRegistryField,
+  createRegistryStatus,
   createReportSection,
   createRequirement,
   createRisk,
+  createDecision,
+  createCommunication,
+  createQuickWin,
+  createBaseline,
   deactivateInvite,
   deleteInterview,
   deleteProcess,
@@ -97,9 +125,19 @@ import {
   deleteGuideSection,
   deleteRequirement,
   deleteRisk,
+  deleteRegistry,
+  deleteRegistryEntry,
+  deleteRegistryField,
+  deleteRegistryStatus,
+  deleteDecision,
+  deleteCommunication,
+  deleteQuickWin,
+  deleteBaseline,
+  importRegistryEntries,
   saveInterviewAnswers,
   duplicateGuide,
   insertReportFragment,
+  listComments,
   updateInterview,
   deleteFact,
   deleteFinding,
@@ -111,9 +149,19 @@ import {
   updateGuideSection,
   updateProcess,
   updateProcessStep,
+  updateRegistry,
+  updateRegistryEntry,
+  updateRegistryField,
+  updateRegistryStatus,
+  updateDecision,
+  updateCommunication,
+  updateQuickWin,
+  updateBaseline,
   updateReportSection,
   updateRequirement,
   updateRisk,
+  bulkDeleteRegistryEntries,
+  bulkStatusRegistryEntries,
   createDomain,
   createDomainGroup,
   createProject,
@@ -129,6 +177,10 @@ import {
   getProjectReport,
   listDomainGroups,
   listDataRequests,
+  listDecisions,
+  listCommunications,
+  listQuickWins,
+  listBaselines,
   listFacts,
   listFindings,
   listGaps,
@@ -141,6 +193,7 @@ import {
   listProjectTemplates,
   listProjects,
   listRegistries,
+  listRegistryEntries,
   listRequirements,
   listRisks,
   listStages,
@@ -176,6 +229,15 @@ export const surveyQueryKeys = {
   gaps: (projectId: string) => [...surveyQueryKeys.project(projectId), 'gaps'] as const,
   requirements: (projectId: string) => [...surveyQueryKeys.project(projectId), 'requirements'] as const,
   registries: (projectId: string) => [...surveyQueryKeys.project(projectId), 'registries'] as const,
+  /** Корень одного реестра: структура + записи (префикс для точечной инвалидации). */
+  registry: (registryId: string) => [...surveyQueryKeys.all, 'registry', registryId] as const,
+  registryEntries: (registryId: string) => [...surveyQueryKeys.registry(registryId), 'entries'] as const,
+  decisions: (projectId: string) => [...surveyQueryKeys.project(projectId), 'decisions'] as const,
+  communications: (projectId: string) => [...surveyQueryKeys.project(projectId), 'communications'] as const,
+  quickWins: (projectId: string) => [...surveyQueryKeys.project(projectId), 'quick-wins'] as const,
+  baselines: (projectId: string) => [...surveyQueryKeys.project(projectId), 'baselines'] as const,
+  comments: (projectId: string, threadType: ThreadType, threadId: string) =>
+    [...surveyQueryKeys.project(projectId), 'comments', threadType, threadId] as const,
   report: (projectId: string) => [...surveyQueryKeys.project(projectId), 'report'] as const,
   guides: (projectId: string) => [...surveyQueryKeys.project(projectId), 'guides'] as const,
   invites: () => [...surveyQueryKeys.all, 'invites'] as const,
@@ -887,6 +949,133 @@ export function useDeleteRequirementMutation(projectId: string) {
   )
 }
 
+// ============================================================
+// Аналитика: журнал решений, коммуникации, quick wins, базлайны
+// ============================================================
+
+export function useDecisionsQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery({
+    queryKey: surveyQueryKeys.decisions(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listDecisions(auth.transport, projectId, { signal }),
+  })
+}
+
+export function useCreateDecisionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateDecisionRequest) => createDecision(transport, projectId, input),
+    () => [surveyQueryKeys.decisions(projectId)],
+  )
+}
+
+export function useUpdateDecisionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { decisionId, input }: { decisionId: string; input: UpdateDecisionRequest }) =>
+      updateDecision(transport, decisionId, input),
+    () => [surveyQueryKeys.decisions(projectId)],
+  )
+}
+
+export function useDeleteDecisionMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, decisionId: string) => deleteDecision(transport, decisionId),
+    () => [surveyQueryKeys.decisions(projectId)],
+  )
+}
+
+export function useCommunicationsQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery({
+    queryKey: surveyQueryKeys.communications(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      listCommunications(auth.transport, projectId, { signal }),
+  })
+}
+
+export function useCreateCommunicationMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateCommunicationRequest) => createCommunication(transport, projectId, input),
+    () => [surveyQueryKeys.communications(projectId)],
+  )
+}
+
+export function useUpdateCommunicationMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      { communicationId, input }: { communicationId: string; input: UpdateCommunicationRequest },
+    ) => updateCommunication(transport, communicationId, input),
+    () => [surveyQueryKeys.communications(projectId)],
+  )
+}
+
+export function useDeleteCommunicationMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, communicationId: string) => deleteCommunication(transport, communicationId),
+    () => [surveyQueryKeys.communications(projectId)],
+  )
+}
+
+export function useQuickWinsQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery({
+    queryKey: surveyQueryKeys.quickWins(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listQuickWins(auth.transport, projectId, { signal }),
+  })
+}
+
+export function useCreateQuickWinMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateQuickWinRequest) => createQuickWin(transport, projectId, input),
+    () => [surveyQueryKeys.quickWins(projectId)],
+  )
+}
+
+export function useUpdateQuickWinMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { quickWinId, input }: { quickWinId: string; input: UpdateQuickWinRequest }) =>
+      updateQuickWin(transport, quickWinId, input),
+    () => [surveyQueryKeys.quickWins(projectId)],
+  )
+}
+
+export function useDeleteQuickWinMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, quickWinId: string) => deleteQuickWin(transport, quickWinId),
+    () => [surveyQueryKeys.quickWins(projectId)],
+  )
+}
+
+export function useBaselinesQuery(projectId: string) {
+  const auth = useAuth()
+  return useQuery({
+    queryKey: surveyQueryKeys.baselines(projectId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => listBaselines(auth.transport, projectId, { signal }),
+  })
+}
+
+export function useCreateBaselineMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateBaselineRequest) => createBaseline(transport, projectId, input),
+    () => [surveyQueryKeys.baselines(projectId)],
+  )
+}
+
+export function useUpdateBaselineMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { baselineId, input }: { baselineId: string; input: UpdateBaselineRequest }) =>
+      updateBaseline(transport, baselineId, input),
+    () => [surveyQueryKeys.baselines(projectId)],
+  )
+}
+
+export function useDeleteBaselineMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, baselineId: string) => deleteBaseline(transport, baselineId),
+    () => [surveyQueryKeys.baselines(projectId)],
+  )
+}
+
 export function registriesQueryOptions(transport: AuthenticatedTransport, projectId: string) {
   return queryOptions({
     queryKey: surveyQueryKeys.registries(projectId),
@@ -901,6 +1090,172 @@ export function useRegistriesQuery(projectId: string) {
 }
 
 // ============================================================
+// Свои реестры: конструктор полей/статусов, записи, bulk, импорт
+// ============================================================
+
+export function registryEntriesQueryOptions(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  query: RegistryEntriesQuery = {},
+) {
+  return queryOptions({
+    queryKey: [...surveyQueryKeys.registryEntries(registryId), query] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      listRegistryEntries(transport, registryId, query, { signal }),
+  })
+}
+
+export function useRegistryEntriesQuery(registryId: string, query: RegistryEntriesQuery = {}) {
+  const auth = useAuth()
+  return useQuery({
+    ...registryEntriesQueryOptions(auth.transport, registryId, query),
+    enabled: registryId.length > 0,
+  })
+}
+
+export function useCreateRegistryMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateRegistryRequest) => createRegistry(transport, projectId, input),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useUpdateRegistryMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { registryId, input }: { registryId: string; input: UpdateRegistryRequest }) =>
+      updateRegistry(transport, registryId, input),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useDeleteRegistryMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, registryId: string) => deleteRegistry(transport, registryId),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useCreateRegistryFieldMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { registryId, input }: { registryId: string; input: CreateRegistryFieldRequest }) =>
+      createRegistryField(transport, registryId, input),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useUpdateRegistryFieldMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { fieldId, input }: { fieldId: string; input: UpdateRegistryFieldRequest }) =>
+      updateRegistryField(transport, fieldId, input),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useDeleteRegistryFieldMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, fieldId: string) => deleteRegistryField(transport, fieldId),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useCreateRegistryStatusMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { registryId, input }: { registryId: string; input: CreateRegistryStatusRequest }) =>
+      createRegistryStatus(transport, registryId, input),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useUpdateRegistryStatusMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, { statusId, input }: { statusId: string; input: UpdateRegistryStatusRequest }) =>
+      updateRegistryStatus(transport, statusId, input),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useDeleteRegistryStatusMutation(projectId: string) {
+  return useSurveyMutation(
+    (transport, statusId: string) => deleteRegistryStatus(transport, statusId),
+    () => [surveyQueryKeys.registries(projectId)],
+  )
+}
+
+export function useCreateRegistryEntryMutation(registryId: string) {
+  return useSurveyMutation(
+    (transport, input: CreateRegistryEntryRequest) =>
+      createRegistryEntry(transport, registryId, input),
+    () => [surveyQueryKeys.registry(registryId)],
+  )
+}
+
+export function useUpdateRegistryEntryMutation(registryId: string) {
+  return useSurveyMutation(
+    (transport, { entryId, input }: { entryId: string; input: UpdateRegistryEntryRequest }) =>
+      updateRegistryEntry(transport, entryId, input),
+    () => [surveyQueryKeys.registry(registryId)],
+  )
+}
+
+export function useDeleteRegistryEntryMutation(registryId: string) {
+  return useSurveyMutation(
+    (transport, entryId: string) => deleteRegistryEntry(transport, entryId),
+    () => [surveyQueryKeys.registry(registryId)],
+  )
+}
+
+export function useBulkStatusRegistryEntriesMutation(registryId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      input: { ids: string[]; statusId: string },
+    ) => bulkStatusRegistryEntries(transport, registryId, input),
+    () => [surveyQueryKeys.registry(registryId)],
+  )
+}
+
+export function useBulkDeleteRegistryEntriesMutation(registryId: string) {
+  return useSurveyMutation(
+    (transport, ids: string[]) => bulkDeleteRegistryEntries(transport, registryId, { ids }),
+    () => [surveyQueryKeys.registry(registryId)],
+  )
+}
+
+export function useImportRegistryEntriesMutation(registryId: string) {
+  return useSurveyMutation(
+    (transport, input: RegistryImportRequest) => importRegistryEntries(transport, registryId, input),
+    () => [surveyQueryKeys.registry(registryId)],
+  )
+}
+
+// ============================================================
+// Комментарии-треды
+// ============================================================
+
+export function useCommentsQuery(projectId: string, threadType: ThreadType, threadId: string) {
+  const auth = useAuth()
+  return useQuery({
+    queryKey: surveyQueryKeys.comments(projectId, threadType, threadId),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      listComments(auth.transport, projectId, { threadType, threadId }, { signal }),
+    enabled: projectId.length > 0 && threadId.length > 0,
+  })
+}
+
+export function useCreateCommentMutation(projectId: string) {
+  return useSurveyMutation(
+    (
+      transport,
+      input: { threadType: ThreadType; threadId: string; body: string; needsAnswer: boolean },
+    ) => createComment(transport, projectId, input),
+    ({ threadType, threadId }) => [
+      surveyQueryKeys.comments(projectId, threadType, threadId),
+      surveyQueryKeys.notifications(),
+    ],
+  )
+}
+
+// ============================================================
 // Отчёт: разделы, автовставки, визы
 // ============================================================
 
@@ -912,9 +1267,12 @@ export function reportQueryOptions(transport: AuthenticatedTransport, projectId:
   })
 }
 
-export function useReportQuery(projectId: string) {
+export function useReportQuery(projectId: string, enabled = true) {
   const auth = useAuth()
-  return useQuery(reportQueryOptions(auth.transport, projectId))
+  return useQuery({
+    ...reportQueryOptions(auth.transport, projectId),
+    enabled: enabled && projectId.length > 0,
+  })
 }
 
 export function useCreateReportSectionMutation(projectId: string) {

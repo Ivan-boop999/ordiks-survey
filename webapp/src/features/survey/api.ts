@@ -72,6 +72,45 @@ import {
   updateRequirementRequestSchema,
   updateRiskRequestSchema,
   registriesResponseSchema,
+  registrySchema,
+  createRegistryRequestSchema,
+  updateRegistryRequestSchema,
+  createRegistryFieldRequestSchema,
+  updateRegistryFieldRequestSchema,
+  createRegistryStatusRequestSchema,
+  updateRegistryStatusRequestSchema,
+  registryStatusDeletedSchema,
+  registryEntriesQuerySchema,
+  registryEntriesResponseSchema,
+  registryEntrySchema,
+  createRegistryEntryRequestSchema,
+  updateRegistryEntryRequestSchema,
+  bulkRegistryEntriesRequestSchema,
+  bulkRegistryEntriesResponseSchema,
+  bulkDeleteRegistryEntriesRequestSchema,
+  bulkDeleteRegistryEntriesResponseSchema,
+  registryImportRequestSchema,
+  registryImportResponseSchema,
+  commentsResponseSchema,
+  commentsQuerySchema,
+  commentSchema,
+  createCommentRequestSchema,
+  decisionsResponseSchema,
+  decisionSchema,
+  createDecisionRequestSchema,
+  updateDecisionRequestSchema,
+  communicationsResponseSchema,
+  communicationSchema,
+  createCommunicationRequestSchema,
+  updateCommunicationRequestSchema,
+  quickWinsResponseSchema,
+  quickWinSchema,
+  createQuickWinRequestSchema,
+  updateQuickWinRequestSchema,
+  baselinesResponseSchema,
+  baselineSchema,
+  createBaselineRequestSchema,
+  updateBaselineRequestSchema,
   createReportSectionRequestSchema,
   projectReportSchema,
   reportInsertRequestSchema,
@@ -143,6 +182,28 @@ import {
   type SectionApprovalRequest,
   type UpdateReportSectionRequest,
   type MarkThreadReadRequest,
+  type CommentsQuery,
+  type CreateCommentRequest,
+  type CreateRegistryRequest,
+  type UpdateRegistryRequest,
+  type CreateRegistryFieldRequest,
+  type UpdateRegistryFieldRequest,
+  type CreateRegistryStatusRequest,
+  type UpdateRegistryStatusRequest,
+  type RegistryEntriesQuery,
+  type CreateRegistryEntryRequest,
+  type UpdateRegistryEntryRequest,
+  type BulkRegistryEntriesRequest,
+  type BulkDeleteRegistryEntriesRequest,
+  type RegistryImportRequest,
+  type CreateDecisionRequest,
+  type UpdateDecisionRequest,
+  type CreateCommunicationRequest,
+  type UpdateCommunicationRequest,
+  type CreateQuickWinRequest,
+  type UpdateQuickWinRequest,
+  type CreateBaselineRequest,
+  type UpdateBaselineRequest,
   type CreateGuideRequest,
   type UpdateGuideRequest,
   type CreateGuideSectionRequest,
@@ -870,6 +931,364 @@ export function listRegistries(
   options: { signal?: AbortSignal } = {},
 ) {
   return transport.request(`/api/projects/${id(projectId)}/registries`, registriesResponseSchema, options)
+}
+
+// ============================================================
+// Комментарии-треды (обсуждения фактов, находок, интервью, запросов…)
+// ============================================================
+
+export function listComments(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  query: CommentsQuery,
+  options: { signal?: AbortSignal } = {},
+) {
+  const normalized = commentsQuerySchema.parse(query)
+  const search = new URLSearchParams({
+    threadType: normalized.threadType,
+    threadId: normalized.threadId,
+  })
+  return transport.request(
+    `/api/projects/${id(projectId)}/comments?${search.toString()}`,
+    commentsResponseSchema,
+    options,
+  )
+}
+
+export function createComment(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateCommentRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/comments`, commentSchema, {
+    method: 'POST',
+    body: createCommentRequestSchema.parse(input),
+  })
+}
+
+// ============================================================
+// Свои реестры: конструктор (поля/статусы), записи, bulk, импорт
+// ============================================================
+
+export function getRegistry(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/registries/${id(registryId)}`, registrySchema, options)
+}
+
+export function createRegistry(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateRegistryRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/registries`, registrySchema, {
+    method: 'POST',
+    body: createRegistryRequestSchema.parse(input),
+  })
+}
+
+export function updateRegistry(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  input: UpdateRegistryRequest,
+) {
+  return transport.request(`/api/registries/${id(registryId)}`, registrySchema, {
+    method: 'PATCH',
+    body: updateRegistryRequestSchema.parse(input),
+  })
+}
+
+export function deleteRegistry(transport: AuthenticatedTransport, registryId: string) {
+  return transport.request(`/api/registries/${id(registryId)}`, noContent, { method: 'DELETE' })
+}
+
+export function createRegistryField(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  input: CreateRegistryFieldRequest,
+) {
+  return transport.request(`/api/registries/${id(registryId)}/fields`, registrySchema, {
+    method: 'POST',
+    body: createRegistryFieldRequestSchema.parse(input),
+  })
+}
+
+export function updateRegistryField(
+  transport: AuthenticatedTransport,
+  fieldId: string,
+  input: UpdateRegistryFieldRequest,
+) {
+  return transport.request(`/api/registry-fields/${id(fieldId)}`, registrySchema, {
+    method: 'PATCH',
+    body: updateRegistryFieldRequestSchema.parse(input),
+  })
+}
+
+export function deleteRegistryField(transport: AuthenticatedTransport, fieldId: string) {
+  return transport.request(`/api/registry-fields/${id(fieldId)}`, noContent, { method: 'DELETE' })
+}
+
+export function createRegistryStatus(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  input: CreateRegistryStatusRequest,
+) {
+  return transport.request(`/api/registries/${id(registryId)}/statuses`, registrySchema, {
+    method: 'POST',
+    body: createRegistryStatusRequestSchema.parse(input),
+  })
+}
+
+export function updateRegistryStatus(
+  transport: AuthenticatedTransport,
+  statusId: string,
+  input: UpdateRegistryStatusRequest,
+) {
+  return transport.request(`/api/registry-statuses/${id(statusId)}`, registrySchema, {
+    method: 'PATCH',
+    body: updateRegistryStatusRequestSchema.parse(input),
+  })
+}
+
+/** Ответ удаления статуса: сколько записей переехали на первый оставшийся. */
+export function deleteRegistryStatus(transport: AuthenticatedTransport, statusId: string) {
+  return transport.request(`/api/registry-statuses/${id(statusId)}`, registryStatusDeletedSchema, {
+    method: 'DELETE',
+  })
+}
+
+export function listRegistryEntries(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  query: RegistryEntriesQuery = {},
+  options: { signal?: AbortSignal } = {},
+) {
+  const search = new URLSearchParams()
+  const normalized = registryEntriesQuerySchema.parse(query)
+  if (normalized.statusId) search.set('statusId', normalized.statusId)
+  if (normalized.q) search.set('q', normalized.q)
+  const qs = search.toString()
+  return transport.request(
+    `/api/registries/${id(registryId)}/entries${qs ? `?${qs}` : ''}`,
+    registryEntriesResponseSchema,
+    options,
+  )
+}
+
+export function createRegistryEntry(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  input: CreateRegistryEntryRequest,
+) {
+  return transport.request(`/api/registries/${id(registryId)}/entries`, registryEntrySchema, {
+    method: 'POST',
+    body: createRegistryEntryRequestSchema.parse(input),
+  })
+}
+
+export function updateRegistryEntry(
+  transport: AuthenticatedTransport,
+  entryId: string,
+  input: UpdateRegistryEntryRequest,
+) {
+  return transport.request(`/api/registry-entries/${id(entryId)}`, registryEntrySchema, {
+    method: 'PATCH',
+    body: updateRegistryEntryRequestSchema.parse(input),
+  })
+}
+
+export function deleteRegistryEntry(transport: AuthenticatedTransport, entryId: string) {
+  return transport.request(`/api/registry-entries/${id(entryId)}`, noContent, { method: 'DELETE' })
+}
+
+export function bulkStatusRegistryEntries(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  input: BulkRegistryEntriesRequest,
+) {
+  return transport.request(
+    `/api/registries/${id(registryId)}/entries/bulk-status`,
+    bulkRegistryEntriesResponseSchema,
+    { method: 'POST', body: bulkRegistryEntriesRequestSchema.parse(input) },
+  )
+}
+
+export function bulkDeleteRegistryEntries(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  input: BulkDeleteRegistryEntriesRequest,
+) {
+  return transport.request(
+    `/api/registries/${id(registryId)}/entries/bulk-delete`,
+    bulkDeleteRegistryEntriesResponseSchema,
+    { method: 'POST', body: bulkDeleteRegistryEntriesRequestSchema.parse(input) },
+  )
+}
+
+export function importRegistryEntries(
+  transport: AuthenticatedTransport,
+  registryId: string,
+  input: RegistryImportRequest,
+) {
+  return transport.request(
+    `/api/registries/${id(registryId)}/import`,
+    registryImportResponseSchema,
+    { method: 'POST', body: registryImportRequestSchema.parse(input) },
+  )
+}
+
+// ============================================================
+// Аналитика: решения, коммуникации, quick wins, базлайны
+// ============================================================
+
+export function listDecisions(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${id(projectId)}/decisions`, decisionsResponseSchema, options)
+}
+
+export function createDecision(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateDecisionRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/decisions`, decisionSchema, {
+    method: 'POST',
+    body: createDecisionRequestSchema.parse(input),
+  })
+}
+
+export function updateDecision(
+  transport: AuthenticatedTransport,
+  decisionId: string,
+  input: UpdateDecisionRequest,
+) {
+  return transport.request(`/api/decisions/${id(decisionId)}`, decisionSchema, {
+    method: 'PATCH',
+    body: updateDecisionRequestSchema.parse(input),
+  })
+}
+
+export function deleteDecision(transport: AuthenticatedTransport, decisionId: string) {
+  return transport.request(`/api/decisions/${id(decisionId)}`, noContent, { method: 'DELETE' })
+}
+
+export function listCommunications(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/communications`,
+    communicationsResponseSchema,
+    options,
+  )
+}
+
+export function createCommunication(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateCommunicationRequest,
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/communications`,
+    communicationSchema,
+    { method: 'POST', body: createCommunicationRequestSchema.parse(input) },
+  )
+}
+
+export function updateCommunication(
+  transport: AuthenticatedTransport,
+  communicationId: string,
+  input: UpdateCommunicationRequest,
+) {
+  return transport.request(
+    `/api/communications/${id(communicationId)}`,
+    communicationSchema,
+    { method: 'PATCH', body: updateCommunicationRequestSchema.parse(input) },
+  )
+}
+
+export function deleteCommunication(transport: AuthenticatedTransport, communicationId: string) {
+  return transport.request(`/api/communications/${id(communicationId)}`, noContent, {
+    method: 'DELETE',
+  })
+}
+
+export function listQuickWins(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(
+    `/api/projects/${id(projectId)}/quick-wins`,
+    quickWinsResponseSchema,
+    options,
+  )
+}
+
+export function createQuickWin(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateQuickWinRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/quick-wins`, quickWinSchema, {
+    method: 'POST',
+    body: createQuickWinRequestSchema.parse(input),
+  })
+}
+
+export function updateQuickWin(
+  transport: AuthenticatedTransport,
+  quickWinId: string,
+  input: UpdateQuickWinRequest,
+) {
+  return transport.request(`/api/quick-wins/${id(quickWinId)}`, quickWinSchema, {
+    method: 'PATCH',
+    body: updateQuickWinRequestSchema.parse(input),
+  })
+}
+
+export function deleteQuickWin(transport: AuthenticatedTransport, quickWinId: string) {
+  return transport.request(`/api/quick-wins/${id(quickWinId)}`, noContent, { method: 'DELETE' })
+}
+
+export function listBaselines(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return transport.request(`/api/projects/${id(projectId)}/baselines`, baselinesResponseSchema, options)
+}
+
+export function createBaseline(
+  transport: AuthenticatedTransport,
+  projectId: string,
+  input: CreateBaselineRequest,
+) {
+  return transport.request(`/api/projects/${id(projectId)}/baselines`, baselineSchema, {
+    method: 'POST',
+    body: createBaselineRequestSchema.parse(input),
+  })
+}
+
+export function updateBaseline(
+  transport: AuthenticatedTransport,
+  baselineId: string,
+  input: UpdateBaselineRequest,
+) {
+  return transport.request(`/api/baselines/${id(baselineId)}`, baselineSchema, {
+    method: 'PATCH',
+    body: updateBaselineRequestSchema.parse(input),
+  })
+}
+
+export function deleteBaseline(transport: AuthenticatedTransport, baselineId: string) {
+  return transport.request(`/api/baselines/${id(baselineId)}`, noContent, { method: 'DELETE' })
 }
 
 // ============================================================

@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { CommentThread } from '../components/CommentThread'
 import { useSurveyProject } from '../use-survey-project'
 import {
   useBulkUpdateFindingsMutation,
@@ -377,7 +378,7 @@ function FindingDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{finding ? 'Находка' : 'Новая находка'}</DialogTitle>
           <DialogDescription>
@@ -500,6 +501,9 @@ function FindingDialog({
             </Field>
           </div>
         </FieldGroup>
+        {finding ? (
+          <CommentThread projectId={projectId} threadId={finding.id} threadType="finding" />
+        ) : null}
         {canEdit ? (
           <DialogFooter>
             <Button onClick={() => onOpenChange(false)} variant="ghost">

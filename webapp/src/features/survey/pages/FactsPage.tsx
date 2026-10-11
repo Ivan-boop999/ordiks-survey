@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/features/auth'
+import { CommentThread } from '../components/CommentThread'
 import { formatDateRu } from '../model'
 import { useSurveyProject } from '../use-survey-project'
 import { factFileDownloadUrl } from '../api'
@@ -275,7 +276,7 @@ function FactViewDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{fact.title}</DialogTitle>
           <DialogDescription>
@@ -310,6 +311,7 @@ function FactViewDialog({
             ))}
           </div>
         ) : null}
+        <CommentThread projectId={fact.projectId} threadId={fact.id} threadType="fact" />
         {canEdit ? (
           <DialogFooter>
             {fact.kind === 'photo' || fact.kind === 'file' ? (

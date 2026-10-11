@@ -27,6 +27,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDateTimeRu, INTERVIEW_STATUS_META } from '../model'
+import { CommentThread } from '../components/CommentThread'
 import { useSurveyProject } from '../use-survey-project'
 import {
   useCreateInterviewMutation,
@@ -514,6 +515,8 @@ function InterviewViewDialog({
             ) : null}
           </div>
         ) : null}
+
+        <CommentThread projectId={detail.projectId} threadId={detail.id} threadType="interview" />
       </DialogContent>
     </Dialog>
   )
