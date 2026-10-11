@@ -7,13 +7,25 @@ import { isSurveySection, sectionPath } from './model'
 // экран и тесты считают переход/список одинаково (ROUTE_BY_THREAD прототипа).
 // ============================================================
 
-/** Маршрут уведомления → раздел обследования; неизвестные ведут на дашборд. */
+/**
+ * Маршрут уведомления → раздел обследования; неизвестные ведут на дашборд.
+ * С threadId добавляет ?focus=: страница раздела открывает диалог нужного объекта
+ * (тред прикреплён к объекту — threadId и есть id факта/находки/интервью/запроса).
+ */
 export function notificationTargetPath(
   route: string,
   projectId: string,
+  threadId?: string,
 ): string {
   const section = isSurveySection(route) ? route : 'dashboard'
-  return sectionPath(projectId, section)
+  const base = sectionPath(projectId, section)
+  return threadId ? `${base}?focus=${encodeURIComponent(threadId)}` : base
+}
+
+/** Читает ?focus= из строки поиска (id объекта, к которому ведёт уведомление). */
+export function focusIdFromSearch(searchStr: string): string | null {
+  const raw = new URLSearchParams(searchStr).get('focus')
+  return raw && raw.length > 0 ? raw : null
 }
 
 /** Убирает тред из списка непрочитанных (после отметки прочитанным). */

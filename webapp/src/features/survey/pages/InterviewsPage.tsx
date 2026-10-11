@@ -42,6 +42,7 @@ import { useAuth } from '@/features/auth'
 import { getInterview } from '../api'
 import type { GuideQuestionDto, GuideSectionDto } from '@ordiks-survey/contracts'
 import { useGuidesQuery } from '../queries'
+import { useFocusTarget } from '../use-focus-target'
 
 /** Интервью: расписание, конспект, анкета по гайду с условными вопросами. */
 export function InterviewsPage() {
@@ -60,6 +61,8 @@ export function InterviewsPage() {
     return map
   }, [guidesQuery.data])
   const items = interviewsQuery.data?.items
+  // Уведомление с ?focus=<id> открывает интервью сразу.
+  useFocusTarget(items, (interview) => setViewingId(interview.id))
   const filtered = useMemo(
     () =>
       (items ?? [])

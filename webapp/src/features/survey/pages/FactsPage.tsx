@@ -41,6 +41,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CommentThread } from '../components/CommentThread'
 import { formatDateRu, toDateInputValue } from '../model'
 import { useSurveyProject } from '../use-survey-project'
+import { useFocusTarget } from '../use-focus-target'
 import {
   useCreateFactMutation,
   useDeleteFactMutation,
@@ -65,6 +66,8 @@ export function FactsPage() {
   const domains = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
   const factTypes = detail?.settings.factTypes ?? []
   const items = factsQuery.data?.items
+  // Уведомление с ?focus=<id> открывает карточку факта.
+  useFocusTarget(items, (fact) => setViewing(fact))
   const filtered = useMemo(
     () =>
       (items ?? []).filter(

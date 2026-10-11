@@ -33,7 +33,10 @@ export function NotificationsBell() {
       {
         onSuccess: () => {
           setOpen(false)
-          void navigate({ to: notificationTargetPath(item.thread.route, item.project.id) })
+          // Ведём не просто к разделу, а к объекту: страница откроет его диалог по ?focus=.
+          void navigate({
+            to: notificationTargetPath(item.thread.route, item.project.id, item.thread.threadId),
+          })
         },
         onError: (error: Error) => toast.error(error.message),
       },

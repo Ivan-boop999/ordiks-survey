@@ -48,6 +48,7 @@ import {
   useUpdateFindingMutation,
 } from '../queries'
 import { useCreateFindingMutation } from '../queries'
+import { useFocusTarget } from '../use-focus-target'
 import { PRIORITY_COLORS } from '../model'
 
 /** Находки: реестр с фильтрами, bulk-сменой статуса и связями на факты-доказательства. */
@@ -75,6 +76,8 @@ export function FindingsPage() {
   const findingStatuses = detail?.settings.findingStatuses ?? []
   const priorities = detail?.settings.findingPriorities ?? []
   const items = findingsQuery.data?.items
+  // Уведомление с ?focus=<id> открывает находку (диалог с тредом обсуждения).
+  useFocusTarget(items, (finding) => setEditing(finding))
   const filtered = useMemo(
     () =>
       (items ?? []).filter(

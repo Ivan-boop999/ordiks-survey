@@ -45,6 +45,7 @@ import {
   useUpdateRequestStatusMutation,
 } from '../queries'
 import { useSurveyProject } from '../use-survey-project'
+import { useFocusTarget } from '../use-focus-target'
 
 type RequestFilter = 'open' | 'overdue' | 'received' | 'all'
 
@@ -78,6 +79,8 @@ export function RequestsPage() {
   }, [membersQuery.data])
 
   const items = requestsQuery.data?.items
+  // Уведомление с ?focus=<id> раскрывает обсуждение нужного запроса.
+  useFocusTarget(items, (request) => setThreadFor(request.id))
   const filtered = useMemo(() => {
     const sorted = (items ?? []).slice().sort((left, right) => {
       const deadlineA = left.deadline ?? '9999'
