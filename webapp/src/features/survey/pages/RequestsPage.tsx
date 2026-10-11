@@ -1,17 +1,18 @@
 import {
   ArrowRight01Icon,
+  BubbleChatIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { DataRequestDto } from '@ordiks-survey/contracts'
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -58,9 +59,23 @@ const FILTER_LABELS: Record<RequestFilter, string> = {
 export function RequestsPage() {
   const { projectId, canEdit, viewRole } = useSurveyProject()
   const requestsQuery = useDataRequestsQuery(projectId)
+  const membersQuery = useMembersQuery(projectId)
   const updateStatus = useUpdateRequestStatusMutation(projectId)
+  const deleteRequest = useDeleteDataRequestMutation(projectId)
   const [filter, setFilter] = useState<RequestFilter>('open')
   const [editing, setEditing] = useState<DataRequestDto | 'new' | null>(null)
+  // Раскрытый тред: обсуждение доступно прямо в строке всем ролям — клиент, ради
+  // которого запросы существуют, раньше не мог спросить (тред был только в диалоге команды).
+  const [threadFor, setThreadFor] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<DataRequestDto | null>(null)
+
+  const memberById = useMemo(() => {
+    const map = new Map<string, { displayName: string | null; email: string }>()
+    for (const member of membersQuery.data?.items ?? []) {
+      map.set(member.userId, { displayName: member.displayName, email: member.email })
+    }
+    return map
+  }, [membersQuery.data])
 
   const items = requestsQuery.data?.items
   const filtered = useMemo(() => {
@@ -145,7 +160,8 @@ export function RequestsPage() {
               {filtered.map((request) => {
                 const meta = REQUEST_STATUS_META[request.status]
                 return (
-                  <TableRow data-testid="request-row" key={request.id}>
+                  <Fragment key={request.id}>
+                  <TableRow data-testid="request-row">
                     <TableCell className="max-w-[320px]">
                       <Typography as="div" variant="control">
                         {request.what}
@@ -157,7 +173,10 @@ export function RequestsPage() {
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      <RequestAssignee projectId={projectId} assigneeId={request.assigneeId} />
+                      <RequestAssignee
+                        assigneeId={request.assigneeId}
+                        memberById={memberById}
+                      />
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {request.deadline ? (
@@ -177,6 +196,16 @@ export function RequestsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          aria-label={`Обсуждение «${request.what}»`}
+                          aria-pressed={threadFor === request.id}
+                          data-testid={`request-thread-toggle-${request.id}`}
+                          onClick={() => setThreadFor(threadFor === request.id ? null : request.id)}
+                          size="icon-sm"
+                          variant={threadFor === request.id ? 'secondary' : 'ghost'}
+                        >
+                          <HugeiconsIcon icon={BubbleChatIcon} strokeWidth={2} />
+                        </Button>
                         {canAnswer && request.status !== 'received' ? (
                           <>
                             {request.status === 'requested' ? (
@@ -185,7 +214,10 @@ export function RequestsPage() {
                                 onClick={() =>
                                   updateStatus.mutate(
                                     { requestId: request.id, status: 'in_progress' },
-                                    { onError: (error) => toast.error(error.message) },
+                                    {
+                                      onSuccess: () => toast.success('Запрос взят в работу'),
+                                      onError: (error) => toast.error(error.message),
+                                    },
                                   )
                                 }
                                 size="sm"
@@ -222,20 +254,52 @@ export function RequestsPage() {
                             >
                               <HugeiconsIcon icon={PencilIcon} strokeWidth={2} />
                             </Button>
-                            <DeleteRequestButton
-                              onDone={() => setEditing(null)}
-                              request={request}
-                            />
+                            <Button
+                              aria-label={`Удалить «${request.what}»`}
+                              onClick={() => setDeleting(request)}
+                              size="icon-sm"
+                              variant="ghost"
+                            >
+                              <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
+                            </Button>
                           </>
                         ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
+                  {threadFor === request.id ? (
+                    <TableRow data-testid={`request-thread-row-${request.id}`}>
+                      <TableCell colSpan={5}>
+                        <CommentThread projectId={projectId} threadId={request.id} threadType="request" />
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  </Fragment>
                 )
               })}
             </TableBody>
           </Table>
       )}
+
+      <ConfirmDeleteDialog
+        description="Обсуждение запроса будет удалено вместе с ним."
+        onConfirm={() => {
+          if (!deleting) return
+          deleteRequest.mutate(deleting.id, {
+            onSuccess: () => {
+              toast.success('Запрос удалён')
+              setDeleting(null)
+            },
+            onError: (error) => toast.error(error.message),
+          })
+        }}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null)
+        }}
+        open={deleting !== null}
+        pending={deleteRequest.isPending}
+        title={deleting ? `Удалить запрос «${deleting.what}»?` : ''}
+      />
 
       {canEdit && editing ? (
         <RequestDialog
@@ -250,9 +314,14 @@ export function RequestsPage() {
   )
 }
 
-function RequestAssignee({ projectId, assigneeId }: { projectId: string; assigneeId: string | null }) {
-  const membersQuery = useMembersQuery(projectId)
-  const member = (membersQuery.data?.items ?? []).find((item) => item.userId === assigneeId)
+function RequestAssignee({
+  assigneeId,
+  memberById,
+}: {
+  assigneeId: string | null
+  memberById: Map<string, { displayName: string | null; email: string }>
+}) {
+  const member = assigneeId ? memberById.get(assigneeId) : undefined
   if (!assigneeId || !member) return <Typography tone="muted">—</Typography>
   return (
     <div className="flex items-center gap-2">
@@ -261,35 +330,6 @@ function RequestAssignee({ projectId, assigneeId }: { projectId: string; assigne
         {member.displayName ?? member.email}
       </Typography>
     </div>
-  )
-}
-
-function DeleteRequestButton({
-  request,
-  onDone,
-}: {
-  request: DataRequestDto
-  onDone: () => void
-}) {
-  const { projectId } = useSurveyProject()
-  const deleteRequest = useDeleteDataRequestMutation(projectId)
-  return (
-    <Button
-      aria-label={`Удалить «${request.what}»`}
-      onClick={() =>
-        deleteRequest.mutate(request.id, {
-          onSuccess: () => {
-            toast.success('Запрос удалён')
-            onDone()
-          },
-          onError: (error) => toast.error(error.message),
-        })
-      }
-      size="icon-sm"
-      variant="ghost"
-    >
-      <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
-    </Button>
   )
 }
 
@@ -408,9 +448,6 @@ function RequestDialog({
             />
           </Field>
         </FieldGroup>
-        {request ? (
-          <CommentThread projectId={projectId} threadId={request.id} threadType="request" />
-        ) : null}
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} variant="ghost">
             Отмена
