@@ -1,17 +1,19 @@
 import {
   ArrowRight01Icon,
+  Cancel01Icon,
   Link02Icon,
   PencilIcon,
   PlusIcon,
+  Search01Icon,
   TrashIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { FindingDto } from '@ordiks-survey/contracts'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -52,11 +54,23 @@ import { PRIORITY_COLORS } from '../model'
 export function FindingsPage() {
   const { projectId, canEdit, detail } = useSurveyProject()
   const findingsQuery = useFindingsQuery(projectId)
+  const membersQuery = useMembersQuery(projectId)
   const bulkUpdate = useBulkUpdateFindingsMutation(projectId)
-  const [domainFilter, setDomainFilter] = useState('')
-  const [priorityFilter, setPriorityFilter] = useState('')
+  const deleteFinding = useDeleteFindingMutation(projectId)
+  const [domainFilter, setDomainFilter] = useState<string>('all')
+  const [priorityFilter, setPriorityFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<FindingDto | 'new' | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState<FindingDto | null>(null)
+
+  // Поиск с дебаунсом — не фильтруем на каждый символ.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), 400)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   const findingStatuses = detail?.settings.findingStatuses ?? []
   const priorities = detail?.settings.findingPriorities ?? []
@@ -65,11 +79,17 @@ export function FindingsPage() {
     () =>
       (items ?? []).filter(
         (finding) =>
-          (!domainFilter || finding.domainId === domainFilter) &&
-          (!priorityFilter || finding.priority === priorityFilter),
+          (domainFilter === 'all' || finding.domainId === domainFilter) &&
+          (priorityFilter === 'all' || finding.priority === priorityFilter) &&
+          (statusFilter === 'all' || finding.status === statusFilter) &&
+          (!search ||
+            finding.title.toLowerCase().includes(search) ||
+            finding.category.toLowerCase().includes(search)),
       ),
-    [items, domainFilter, priorityFilter],
+    [items, domainFilter, priorityFilter, statusFilter, search],
   )
+  const hasActiveFilter =
+    domainFilter !== 'all' || priorityFilter !== 'all' || statusFilter !== 'all' || search !== ''
 
   const statusMeta = (status: string) =>
     findingStatuses.find((item) => item.id === status || item.name === status)
@@ -77,6 +97,15 @@ export function FindingsPage() {
   const groupsQuery = useDomainGroupsQuery(projectId)
   const domains = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
   const factsQuery = useFactsQuery(projectId)
+
+  // Резолв имён участников один раз наверху: раньше useMembersQuery звался из каждой строки.
+  const memberById = useMemo(() => {
+    const map = new Map<string, { displayName: string | null; email: string }>()
+    for (const member of membersQuery.data?.items ?? []) {
+      map.set(member.userId, { displayName: member.displayName, email: member.email })
+    }
+    return map
+  }, [membersQuery.data])
 
   const toggle = (findingId: string) => {
     setSelected((previous) => {
@@ -116,12 +145,29 @@ export function FindingsPage() {
         title="Находки"
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Select onValueChange={setDomainFilter} value={domainFilter || undefined}>
-          <SelectTrigger className="w-[220px]">
+      <div className="flex flex-wrap items-center gap-2" data-testid="finding-filters">
+        <div className="relative">
+          <HugeiconsIcon
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+            icon={Search01Icon}
+            size={14}
+            strokeWidth={2}
+          />
+          <Input
+            aria-label="Поиск по названию и категории"
+            className="h-9 w-[240px] pl-8"
+            data-testid="finding-search"
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Поиск находок…"
+            value={searchInput}
+          />
+        </div>
+        <Select onValueChange={setDomainFilter} value={domainFilter}>
+          <SelectTrigger aria-label="Фильтр по домену" className="h-9 w-[190px]" size="sm">
             <SelectValue placeholder="Все домены" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">Все домены</SelectItem>
             {domains.map((domain) => (
               <SelectItem key={domain.id} value={domain.id}>
                 {domain.name}
@@ -129,11 +175,12 @@ export function FindingsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select onValueChange={setPriorityFilter} value={priorityFilter || undefined}>
-          <SelectTrigger className="w-[180px]">
+        <Select onValueChange={setPriorityFilter} value={priorityFilter}>
+          <SelectTrigger aria-label="Фильтр по приоритету" className="h-9 w-[170px]" size="sm">
             <SelectValue placeholder="Любой приоритет" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">Любой приоритет</SelectItem>
             {priorities.map((priority) => (
               <SelectItem key={priority} value={priority}>
                 {priority}
@@ -141,6 +188,34 @@ export function FindingsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select onValueChange={setStatusFilter} value={statusFilter}>
+          <SelectTrigger aria-label="Фильтр по статусу" className="h-9 w-[170px]" size="sm">
+            <SelectValue placeholder="Все статусы" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все статусы</SelectItem>
+            {findingStatuses.map((status) => (
+              <SelectItem key={status.id} value={status.id}>
+                {status.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {hasActiveFilter ? (
+          <Button
+            aria-label="Сбросить фильтры"
+            onClick={() => {
+              setDomainFilter('all')
+              setPriorityFilter('all')
+              setStatusFilter('all')
+              setSearchInput('')
+            }}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+          </Button>
+        ) : null}
         {canEdit && selected.size > 0 ? (
           <div className="ml-auto flex items-center gap-2" data-testid="finding-bulk">
             <Typography tone="muted" variant="caption">
@@ -160,6 +235,12 @@ export function FindingsPage() {
           Загружаем находки…
         </Typography>
       ) : filtered.length === 0 ? (
+        search ? (
+          <SurveyEmptyState
+            description={`Ничего не найдено по «${search}». Попробуйте изменить запрос или сбросить фильтры.`}
+            title="Ничего не найдено"
+          />
+        ) : (
         <SurveyEmptyState
           action={
             canEdit ? (
@@ -172,9 +253,10 @@ export function FindingsPage() {
           description="Наблюдение с приоритетом и доказательством. Из находок собираются GAP и риски отчёта."
           title="Находок нет"
         />
+        )
       ) : (
         <Table data-testid="findings-table">
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               {canEdit ? (
                 <TableHead className="w-8">
@@ -242,7 +324,7 @@ export function FindingsPage() {
                     <StatusChip color={meta?.color ?? 'gray'}>{meta?.name ?? finding.status}</StatusChip>
                   </TableCell>
                   <TableCell>
-                    <FindingOwner projectId={projectId} ownerId={finding.ownerId} />
+                    <FindingOwner memberId={finding.ownerId} memberById={memberById} />
                   </TableCell>
                   <TableCell onClick={(event) => event.stopPropagation()}>
                     {canEdit ? (
@@ -255,7 +337,14 @@ export function FindingsPage() {
                         >
                           <HugeiconsIcon icon={PencilIcon} strokeWidth={2} />
                         </Button>
-                        <DeleteFindingButton finding={finding} onDone={() => setEditing(null)} />
+                        <Button
+                          aria-label={`Удалить «${finding.title}»`}
+                          onClick={() => setDeleting(finding)}
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
+                        </Button>
                       </div>
                     ) : null}
                   </TableCell>
@@ -265,6 +354,25 @@ export function FindingsPage() {
           </TableBody>
         </Table>
       )}
+
+      <ConfirmDeleteDialog
+        onConfirm={() => {
+          if (!deleting) return
+          deleteFinding.mutate(deleting.id, {
+            onSuccess: () => {
+              toast.success('Находка удалена')
+              setDeleting(null)
+            },
+            onError: (error: Error) => toast.error(error.message),
+          })
+        }}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null)
+        }}
+        open={deleting !== null}
+        pending={deleteFinding.isPending}
+        title={deleting ? `Удалить находку «${deleting.title}»?` : ''}
+      />
 
       {editing ? (
         <FindingDialog
@@ -279,10 +387,15 @@ export function FindingsPage() {
   )
 }
 
-function FindingOwner({ projectId, ownerId }: { projectId: string; ownerId: string | null }) {
-  const membersQuery = useMembersQuery(projectId)
-  const member = (membersQuery.data?.items ?? []).find((item) => item.userId === ownerId)
-  if (!ownerId || !member) return <Typography tone="muted">—</Typography>
+function FindingOwner({
+  memberId,
+  memberById,
+}: {
+  memberId: string | null
+  memberById: Map<string, { displayName: string | null; email: string }>
+}) {
+  const member = memberId ? memberById.get(memberId) : undefined
+  if (!memberId || !member) return <Typography tone="muted">—</Typography>
   return (
     <div className="flex items-center gap-2">
       <UserAvatar name={member.displayName ?? member.email} />
@@ -290,29 +403,6 @@ function FindingOwner({ projectId, ownerId }: { projectId: string; ownerId: stri
         {member.displayName ?? member.email}
       </Typography>
     </div>
-  )
-}
-
-function DeleteFindingButton({ finding, onDone }: { finding: FindingDto; onDone: () => void }) {
-  const { projectId } = useSurveyProject()
-  const deleteFinding = useDeleteFindingMutation(projectId)
-  return (
-    <Button
-      aria-label={`Удалить «${finding.title}»`}
-      onClick={() =>
-        deleteFinding.mutate(finding.id, {
-          onSuccess: () => {
-            toast.success('Находка удалена')
-            onDone()
-          },
-          onError: (error: Error) => toast.error(error.message),
-        })
-      }
-      size="icon-sm"
-      variant="ghost"
-    >
-      <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
-    </Button>
   )
 }
 
