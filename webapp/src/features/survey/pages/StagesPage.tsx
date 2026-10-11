@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ProgressBar, StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, ProgressBar, StatusChip, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -97,7 +97,11 @@ export function StagesPage() {
             const meta = STAGE_STATUS_META[stage.status]
             return (
               <div
-                className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm"
+                className={`grid gap-3 rounded-xl border bg-card p-4 shadow-sm ${
+                  stage.status === 'active'
+                    ? 'border-l-4 border-l-primary bg-primary/5'
+                    : ''
+                }`}
                 data-testid={`stage-card-${stage.id}`}
                 key={stage.id}
               >
@@ -111,7 +115,10 @@ export function StagesPage() {
                           onClick={() =>
                             moveStage.mutate(
                               { stages, index, direction: -1 },
-                              { onError: (error) => toast.error(error.message) },
+                              {
+                                onSuccess: () => toast.success('Этап перемещён'),
+                                onError: (error) => toast.error(error.message),
+                              },
                             )
                           }
                           size="icon-xs"
@@ -125,7 +132,10 @@ export function StagesPage() {
                           onClick={() =>
                             moveStage.mutate(
                               { stages, index, direction: 1 },
-                              { onError: (error) => toast.error(error.message) },
+                              {
+                                onSuccess: () => toast.success('Этап перемещён'),
+                                onError: (error) => toast.error(error.message),
+                              },
                             )
                           }
                           size="icon-xs"
@@ -148,6 +158,7 @@ export function StagesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {stage.status === 'active' ? <StatusChip color="blue">Сейчас</StatusChip> : null}
                     {stage.milestone ? (
                       <StatusChip color="purple">
                         <HugeiconsIcon icon={MilestoneIcon} size={12} strokeWidth={2} />
@@ -197,23 +208,34 @@ export function StagesPage() {
 function DeleteStageButton({ name, stageId }: { name: string; stageId: string }) {
   const { projectId } = useSurveyProject()
   const deleteStage = useDeleteStageMutation(projectId)
+  const [confirming, setConfirming] = useState(false)
   return (
-    <Button
-      aria-label={`Удалить «${name}»`}
-      disabled={deleteStage.isPending}
-      onClick={() => {
-        if (window.confirm(`Удалить этап «${name}»? Его задачи останутся в проекте.`)) {
+    <>
+      <Button
+        aria-label={`Удалить «${name}»`}
+        onClick={() => setConfirming(true)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <HugeiconsIcon className="text-red-600" icon={TrashIcon} strokeWidth={2} />
+      </Button>
+      <ConfirmDeleteDialog
+        description="Задачи этапа останутся в проекте без этапа."
+        onConfirm={() =>
           deleteStage.mutate(stageId, {
-            onSuccess: () => toast.success('Этап удалён'),
+            onSuccess: () => {
+              toast.success('Этап удалён')
+              setConfirming(false)
+            },
             onError: (error) => toast.error(error.message),
           })
         }
-      }}
-      size="icon-sm"
-      variant="ghost"
-    >
-      <HugeiconsIcon className="text-red-600" icon={TrashIcon} strokeWidth={2} />
-    </Button>
+        onOpenChange={setConfirming}
+        open={confirming}
+        pending={deleteStage.isPending}
+        title={`Удалить этап «${name}»?`}
+      />
+    </>
   )
 }
 
@@ -236,10 +258,17 @@ function StageDialog({
   const [milestone, setMilestone] = useState(stage?.milestone ?? false)
   const [error, setError] = useState<string | null>(null)
 
+  // «Окончание ≥ начала»: иначе ломаются сортировка и таймлайн (аудит).
+  const datesInvalid = start !== '' && end !== '' && end < start
+
   const submit = () => {
     setError(null)
     if (name.trim().length === 0) {
       setError('Название этапа обязательно.')
+      return
+    }
+    if (datesInvalid) {
+      setError('Окончание не может быть раньше начала.')
       return
     }
     const payload = {
@@ -296,11 +325,17 @@ function StageDialog({
             <Field>
               <FieldLabel htmlFor="stage-end">Окончание</FieldLabel>
               <Input
+                aria-invalid={datesInvalid || undefined}
                 id="stage-end"
                 onChange={(event) => setEnd(event.target.value)}
                 type="date"
                 value={end}
               />
+              {datesInvalid ? (
+                <Typography as="p" className="text-red-600" variant="caption">
+                  Окончание раньше начала
+                </Typography>
+              ) : null}
             </Field>
           </div>
           <div className="grid grid-cols-2 items-end gap-3">
@@ -340,7 +375,7 @@ function StageDialog({
           <Button onClick={() => onOpenChange(false)} variant="outline">
             Отмена
           </Button>
-          <Button data-testid="stage-submit" disabled={pending} onClick={submit}>
+          <Button data-testid="stage-submit" disabled={pending || datesInvalid} onClick={submit}>
             {pending ? 'Сохраняем…' : 'Сохранить'}
           </Button>
         </DialogFooter>
