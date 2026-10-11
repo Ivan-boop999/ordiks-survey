@@ -39,6 +39,7 @@ import {
   displayNameOf,
   formatDateRu,
   isOverdue,
+  parseDateLocal,
   TASK_STATUS_META,
   toDateInputValue,
 } from '../model'
@@ -568,7 +569,7 @@ function TaskDialog({
       title: title.trim(),
       description: description.trim(),
       status,
-      deadline: deadline ? new Date(`${deadline}T00:00:00.000Z`) : null,
+      deadline: deadline ? parseDateLocal(deadline) : null,
       // В селектах пустое значение — литерал "none"; в API это null.
       stageId: stageId && stageId !== 'none' ? stageId : null,
       domainId: domainId && domainId !== 'none' ? domainId : null,

@@ -275,11 +275,22 @@ export function formatDateTimeRu(value: Date | string | null | undefined): strin
   return ruDateTime.format(date)
 }
 
-/** Значение для `<input type="date">` (YYYY-MM-DD) или null. */
+/** Значение для `<input type="date">` (YYYY-MM-DD) или null — по локальным компонентам даты. */
 export function toDateInputValue(value: Date | string | null | undefined): string {
   const date = toDate(value)
   if (!date) return ''
-  return date.toISOString().slice(0, 10)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/**
+ * Локальная полночь из 'YYYY-MM-DD': `new Date(\`${v}T00:00:00.000Z\`)` в таймзонах западнее
+ * UTC показывал предыдущий день (аудит: «даты сдвигаются на день»).
+ */
+export function parseDateLocal(value: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return new Date(value)
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000

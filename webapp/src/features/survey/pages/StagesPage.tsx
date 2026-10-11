@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useSurveyProject } from '../use-survey-project'
-import { formatDateRu, STAGE_STATUS_META, toDateInputValue } from '../model'
+import { formatDateRu, parseDateLocal, STAGE_STATUS_META, toDateInputValue } from '../model'
 import {
   useCreateStageMutation,
   useDeleteStageMutation,
@@ -273,8 +273,8 @@ function StageDialog({
     }
     const payload = {
       name: name.trim(),
-      startAt: start ? new Date(`${start}T00:00:00.000Z`) : null,
-      endAt: end ? new Date(`${end}T00:00:00.000Z`) : null,
+      startAt: start ? parseDateLocal(start) : null,
+      endAt: end ? parseDateLocal(end) : null,
       status,
       milestone,
     }
