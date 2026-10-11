@@ -243,12 +243,18 @@ function KanbanBoard({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="plan-kanban">
+    <div data-testid="plan-kanban">
+      {/* Мобильный: горизонтальный свайп со снапом (HTML5 DnD на таче не работает —
+          остаются стрелки на карточках); на md+ — прежняя сетка колонок. */}
+      <Typography as="p" className="mb-2 md:hidden" tone="muted" variant="caption">
+        Колонки листаются по горизонтали →
+      </Typography>
+      <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 md:mx-0 md:grid md:snap-none md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-4">
       {partitionByStatus(tasks).map(({ status, tasks: columnTasks }) => {
         const meta = TASK_STATUS_META[status]
         return (
           <div
-            className={`flex min-w-0 flex-col gap-2 rounded-xl bg-muted/60 p-2.5 ${
+            className={`flex min-w-[260px] shrink-0 snap-start flex-col gap-2 rounded-xl bg-muted/60 p-2.5 md:min-w-0 md:shrink ${
               dragOverColumn === status ? 'outline-2 outline-dashed outline-primary' : ''
             }`}
             data-testid={`kanban-column-${status}`}
@@ -343,6 +349,7 @@ function KanbanBoard({
           </div>
         )
       })}
+      </div>
     </div>
   )
 }
