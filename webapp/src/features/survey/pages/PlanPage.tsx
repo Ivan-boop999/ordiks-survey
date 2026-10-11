@@ -64,6 +64,7 @@ export function PlanPage() {
   const tasksQuery = useTasksQuery(projectId)
   const stagesQuery = useStagesQuery(projectId)
   const domainsQuery = useDomainGroupsQuery(projectId)
+  const membersQuery = useMembersQuery(projectId)
   const [view, setView] = useState<PlanView>('kanban')
   const [stageFilter, setStageFilter] = useState<string>('all')
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all')
@@ -80,13 +81,21 @@ export function PlanPage() {
     () => (domainsQuery.data?.items ?? []).flatMap((group) => group.domains),
     [domainsQuery.data],
   )
-  const assignees = useMemo(() => {
-    const map = new Map<string, { id: string; name: string | null }>()
-    for (const task of tasksQuery.data?.items ?? []) {
-      if (!task.assigneeId) continue
-      if (!map.has(task.assigneeId)) map.set(task.assigneeId, { id: task.assigneeId, name: null })
+  const assigneeNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const member of membersQuery.data?.items ?? []) {
+      map.set(member.userId, displayNameOf(member.displayName, member.email))
     }
-    return [...map.values()]
+    return map
+  }, [membersQuery.data])
+  // Идентификаторы берём из задач, подписи — из справочника участников: раньше здесь
+  // рендерились сырые UUID (аудит: баг фильтра исполнителей).
+  const assignees = useMemo(() => {
+    const seen = new Set<string>()
+    for (const task of tasksQuery.data?.items ?? []) {
+      if (task.assigneeId) seen.add(task.assigneeId)
+    }
+    return [...seen]
   }, [tasksQuery.data])
 
   const tasks = useMemo(() => {
@@ -153,9 +162,9 @@ export function PlanPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Все исполнители</SelectItem>
-            {assignees.map((member) => (
-              <SelectItem key={member.id} value={member.id}>
-                {member.name ?? member.id}
+            {assignees.map((assigneeId) => (
+              <SelectItem key={assigneeId} value={assigneeId}>
+                {assigneeNameById.get(assigneeId) ?? 'Без имени'}
               </SelectItem>
             ))}
           </SelectContent>
