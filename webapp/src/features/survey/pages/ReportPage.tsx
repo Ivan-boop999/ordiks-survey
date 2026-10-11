@@ -2,6 +2,7 @@ import {
   ArrowDown01Icon,
   ArrowRight01Icon,
   ArrowUp01Icon,
+  Doc02Icon,
   PencilIcon,
   PlusIcon,
   PrinterIcon,
@@ -9,7 +10,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ReportInsertKind, ReportSectionDto } from '@ordiks-survey/contracts'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { PageContainer, PageHeader } from '@/components/PageLayout'
 import { ConfirmDeleteDialog, StatusChip, UserAvatar } from '@/components/survey'
@@ -39,7 +40,16 @@ import {
   displayNameOf,
   formatDateRu,
 } from '../model'
-import { approvalSummary, canApproveSections } from '../report-model'
+import {
+  approvalSummary,
+  buildReportWordHtml,
+  canApproveSections,
+  downloadBlob,
+  hasInsertFragment,
+  tableHtml,
+  wrapLinesList,
+  wrapSelection,
+} from '../report-model'
 import { REPORT_PRINT_CSS, ReportTitlePage } from '../report-print'
 import {
   useApproveSectionMutation,
@@ -70,6 +80,21 @@ export function ReportPage() {
       roleLabel: MEMBER_ROLE_LABELS[member.role],
     }))
 
+  // Клиентский экспорт в Word: та же разметка, что для печати, HTML-as-doc.
+  const exportWord = () => {
+    const html = buildReportWordHtml(
+      {
+        projectName: detail?.name ?? 'Проект',
+        client: detail?.client ?? '',
+        dateLabel: formatDateRu(new Date()),
+        members: teamMembers,
+      },
+      sections.map((section) => ({ title: section.title, body: section.body })),
+    )
+    downloadBlob(new Blob(['\ufeff', html], { type: 'application/msword' }), `report-${projectId}.doc`)
+    toast.success('Отчёт выгружен в Word (.doc)')
+  }
+
   return (
     <PageContainer>
       <style>{REPORT_PRINT_CSS}</style>
@@ -79,6 +104,10 @@ export function ReportPage() {
             <Button data-testid="report-print-button" onClick={() => window.print()} variant="outline">
               <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
               Печать/PDF
+            </Button>
+            <Button data-testid="report-word-button" onClick={exportWord} variant="outline">
+              <HugeiconsIcon icon={Doc02Icon} strokeWidth={2} />
+              Word
             </Button>
             {canEdit ? (
               <Button data-testid="section-create-open" onClick={() => setEditing('new')}>
@@ -384,19 +413,24 @@ function InsertButtons({ section }: { section: ReportSectionDto }) {
   const registriesQuery = useRegistriesQuery(projectId)
   const [findingDomain, setFindingDomain] = useState('')
   const [registryId, setRegistryId] = useState('')
+  // Защита от дублей: повторная вставка той же таблицы в раздел — с подтверждением.
+  const [confirmingInsert, setConfirmingInsert] = useState<ReportInsertKind | null>(null)
 
   const domains = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
   const registries = registriesQuery.data?.items ?? []
 
-  const run = (kind: ReportInsertKind) => {
-    if (kind === 'findings' && !findingDomain) {
-      toast.error('Выберите домен для вставки находок')
-      return
-    }
-    if (kind === 'registry' && !registryId) {
-      toast.error('Выберите реестр')
-      return
-    }
+  const insertCtx = (kind: ReportInsertKind) => ({
+    domainName:
+      kind === 'findings'
+        ? (domains.find((domain) => domain.id === findingDomain)?.name ?? '')
+        : undefined,
+    registryName:
+      kind === 'registry'
+        ? (registries.find((registry) => registry.id === registryId)?.name ?? '')
+        : undefined,
+  })
+
+  const doInsert = (kind: ReportInsertKind) => {
     insert.mutate(
       {
         sectionId: section.id,
@@ -411,8 +445,41 @@ function InsertButtons({ section }: { section: ReportSectionDto }) {
     )
   }
 
+  const run = (kind: ReportInsertKind) => {
+    if (kind === 'findings' && !findingDomain) {
+      toast.error('Выберите домен для вставки находок')
+      return
+    }
+    if (kind === 'registry' && !registryId) {
+      toast.error('Выберите реестр')
+      return
+    }
+    if (hasInsertFragment(section.body, kind, insertCtx(kind))) {
+      setConfirmingInsert(kind)
+      return
+    }
+    doInsert(kind)
+  }
+
   return (
     <>
+      {confirmingInsert !== null ? (
+        <ConfirmDeleteDialog
+          confirmLabel="Всё равно добавить"
+          destructive={false}
+          description="Такая таблица уже есть в теле раздела — повторная вставка продублирует её."
+          onConfirm={() => {
+            const kind = confirmingInsert
+            setConfirmingInsert(null)
+            doInsert(kind)
+          }}
+          onOpenChange={(open) => {
+            if (!open) setConfirmingInsert(null)
+          }}
+          open={confirmingInsert !== null}
+          title="Вставка уже существует"
+        />
+      ) : null}
       <Button
         data-testid="insert-findings"
         disabled={insert.isPending}
@@ -540,6 +607,7 @@ function SectionDialog({
   const [title, setTitle] = useState(section?.title ?? '')
   const [body, setBody] = useState(section?.body ?? '')
   const pending = createSection.isPending || updateSection.isPending
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null)
 
   const submit = () => {
     if (!title.trim()) return
@@ -561,8 +629,8 @@ function SectionDialog({
         <DialogHeader>
           <DialogTitle>{section ? 'Раздел отчёта' : 'Новый раздел'}</DialogTitle>
           <DialogDescription>
-            Тело — HTML (таблицы, списки); сервер оставляет только безопасные теги. Правки тела
-            сбрасывают визы.
+            Тело — HTML (таблицы, списки); панель сверху оборачивает выделение тегами. Сервер
+            оставляет только безопасные теги; правки тела сбрасывают визы.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -577,11 +645,13 @@ function SectionDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="section-body">Тело (HTML)</FieldLabel>
+            <FormatToolbar bodyRef={bodyRef} body={body} onChange={setBody} />
             <Textarea
               className="min-h-48 [font-family:var(--font-mono)] [font-size:0.75rem]"
               data-testid="section-body-input"
               id="section-body"
               onChange={(event) => setBody(event.target.value)}
+              ref={bodyRef}
               rows={10}
               value={body}
             />
@@ -598,5 +668,194 @@ function SectionDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Панель форматирования тела раздела: первый шаг от сырого HTML к WYSIWYG — обёртки
+ * выделения (Ж/К/подчёркнутый, H2/H3), списки, таблица, ссылка, разделитель.
+ */
+function FormatToolbar({
+  body,
+  bodyRef,
+  onChange,
+}: {
+  body: string
+  bodyRef: React.RefObject<HTMLTextAreaElement | null>
+  onChange: (next: string) => void
+}) {
+  const [tableOpen, setTableOpen] = useState(false)
+  const [rows, setRows] = useState('2')
+  const [cols, setCols] = useState('3')
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
+
+  const apply = (
+    transform: (text: string, start: number, end: number) => {
+      text: string
+      selectionStart: number
+      selectionEnd: number
+    },
+  ) => {
+    const el = bodyRef.current
+    const start = el?.selectionStart ?? body.length
+    const end = el?.selectionEnd ?? start
+    const result = transform(body, start, end)
+    onChange(result.text)
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(result.selectionStart, result.selectionEnd)
+    })
+  }
+
+  const wrap = (before: string, after: string) =>
+    apply((text, start, end) => wrapSelection(text, start, end, before, after))
+  const insert = (snippet: string) =>
+    apply((text, start, end) => ({
+      text: `${text.slice(0, start)}${snippet}${text.slice(end)}`,
+      selectionStart: start + snippet.length,
+      selectionEnd: start + snippet.length,
+    }))
+
+  return (
+    <div
+      aria-label="Панель форматирования"
+      className="mb-1.5 flex flex-wrap items-center gap-0.5 rounded-lg border bg-muted/40 p-1"
+      data-testid="report-format-toolbar"
+    >
+      <Button aria-label="Полужирный" onClick={() => wrap('<strong>', '</strong>')} size="xs" variant="ghost">
+        <span className="font-bold">Ж</span>
+      </Button>
+      <Button aria-label="Курсив" onClick={() => wrap('<em>', '</em>')} size="xs" variant="ghost">
+        <span className="italic">К</span>
+      </Button>
+      <Button aria-label="Подчёркнутый" onClick={() => wrap('<u>', '</u>')} size="xs" variant="ghost">
+        <span className="underline">Ч</span>
+      </Button>
+      <Button aria-label="Заголовок 2" onClick={() => wrap('<h2>', '</h2>')} size="xs" variant="ghost">
+        H2
+      </Button>
+      <Button aria-label="Заголовок 3" onClick={() => wrap('<h3>', '</h3>')} size="xs" variant="ghost">
+        H3
+      </Button>
+      <Button
+        aria-label="Маркированный список"
+        onClick={() => apply((text, start, end) => wrapLinesList(text, start, end, 'ul'))}
+        size="xs"
+        variant="ghost"
+      >
+        • Список
+      </Button>
+      <Button
+        aria-label="Нумерованный список"
+        onClick={() => apply((text, start, end) => wrapLinesList(text, start, end, 'ol'))}
+        size="xs"
+        variant="ghost"
+      >
+        1. Список
+      </Button>
+      <Button aria-label="Таблица" onClick={() => setTableOpen(true)} size="xs" variant="ghost">
+        Таблица
+      </Button>
+      <Button aria-label="Ссылка" onClick={() => setLinkOpen(true)} size="xs" variant="ghost">
+        Ссылка
+      </Button>
+      <Button aria-label="Разделитель" onClick={() => insert('<hr>')} size="xs" variant="ghost">
+        ―
+      </Button>
+
+      {tableOpen ? (
+        <Dialog
+          onOpenChange={(open) => {
+            if (!open) setTableOpen(false)
+          }}
+          open
+        >
+          <DialogContent className="sm:max-w-xs">
+            <DialogHeader>
+              <DialogTitle>Таблица</DialogTitle>
+              <DialogDescription>Размер шапка×строки; вставится на место курсора.</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="table-rows">Строк</FieldLabel>
+                <Input
+                  id="table-rows"
+                  inputMode="numeric"
+                  onChange={(event) => setRows(event.target.value)}
+                  value={rows}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="table-cols">Колонок</FieldLabel>
+                <Input
+                  id="table-cols"
+                  inputMode="numeric"
+                  onChange={(event) => setCols(event.target.value)}
+                  value={cols}
+                />
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setTableOpen(false)} variant="ghost">
+                Отмена
+              </Button>
+              <Button
+                data-testid="table-insert"
+                onClick={() => {
+                  insert(tableHtml(Number(rows), Number(cols)))
+                  setTableOpen(false)
+                }}
+              >
+                Вставить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {linkOpen ? (
+        <Dialog
+          onOpenChange={(open) => {
+            if (!open) setLinkOpen(false)
+          }}
+          open
+        >
+          <DialogContent className="sm:max-w-xs">
+            <DialogHeader>
+              <DialogTitle>Ссылка</DialogTitle>
+              <DialogDescription>Выделенный текст станет ссылкой.</DialogDescription>
+            </DialogHeader>
+            <Field>
+              <FieldLabel htmlFor="link-url">URL</FieldLabel>
+              <Input
+                id="link-url"
+                onChange={(event) => setLinkUrl(event.target.value)}
+                placeholder="https://…"
+                value={linkUrl}
+              />
+            </Field>
+            <DialogFooter>
+              <Button onClick={() => setLinkOpen(false)} variant="ghost">
+                Отмена
+              </Button>
+              <Button
+                data-testid="link-insert"
+                disabled={!linkUrl.trim()}
+                onClick={() => {
+                  const url = linkUrl.trim()
+                  if (/^https?:\/\//.test(url)) {
+                    wrap(`<a href="${url}">`, '</a>')
+                    setLinkOpen(false)
+                  }
+                }}
+              >
+                Вставить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+    </div>
   )
 }

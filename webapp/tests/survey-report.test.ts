@@ -6,9 +6,14 @@ import type { ReportSectionDto, SectionApprovalDto } from '@ordiks-survey/contra
 import {
   approvalPayload,
   approvalSummary,
+  buildReportWordHtml,
   canApproveSections,
+  hasInsertFragment,
   moveSectionIds,
   readinessSummary,
+  tableHtml,
+  wrapLinesList,
+  wrapSelection,
 } from '../src/features/survey/report-model'
 import { REPORT_PRINT_CSS, ReportTitlePage } from '../src/features/survey/report-print'
 
@@ -121,5 +126,57 @@ describe('печать отчёта', () => {
     expect(REPORT_PRINT_CSS).toContain('.report-print-hidden { display: none !important; }')
     // Таблицы автовставок читаются и на экране, и на бумаге.
     expect(REPORT_PRINT_CSS).toContain('.report-body table')
+  })
+})
+
+describe('панель форматирования и вставки (улучшения 2026-10)', () => {
+  test('wrapSelection оборачивает выделение и возвращает новый диапазон', () => {
+    // «вопрос и ответ»: выделение 9..14 — слово «ответ».
+    const result = wrapSelection('вопрос и ответ', 9, 14, '<strong>', '</strong>')
+    expect(result.text).toBe('вопрос и <strong>ответ</strong>')
+    expect(result.selectionStart).toBe(9 + '<strong>'.length)
+    expect(result.selectionEnd).toBe(result.selectionStart + 'ответ'.length)
+  })
+
+  test('wrapLinesList превращает выделенные строки в li (расширяя до строк целиком)', () => {
+    const text = 'до\nраз\nдва\nпосле'
+    const result = wrapLinesList(text, 3, 10, 'ul')
+    expect(result.text).toBe('до\n<ul><li>раз</li><li>два</li></ul>\nпосле')
+  })
+
+  test('tableHtml ограничивает размеры и рисует шапку', () => {
+    const html = tableHtml(2, 3)
+    expect(html).toContain('<th>Колонка 1</th>')
+    expect((html.match(/<tr>/g) ?? []).length).toBe(3) // шапка + 2 строки
+    expect(tableHtml(99, 99)).not.toContain('Колонка 11')
+  })
+
+  test('hasInsertFragment находит уже вставленную таблицу по заголовку сервера', () => {
+    const body =
+      '<h3>Проблемы: Производство</h3><table><tr><th>Проблема</th></tr></table>'
+    expect(hasInsertFragment(body, 'findings', { domainName: 'Производство' })).toBe(true)
+    expect(hasInsertFragment(body, 'findings', { domainName: 'Качество' })).toBe(false)
+    expect(hasInsertFragment('', 'risks', {})).toBe(false)
+    expect(hasInsertFragment('<h3>Реестр рисков</h3>', 'risks', {})).toBe(true)
+  })
+
+  test('buildReportWordHtml собирает титул и разделы для HTML-as-doc', () => {
+    const html = buildReportWordHtml(
+      {
+        projectName: 'Обследование «Завод»',
+        client: 'ООО «Завод»',
+        dateLabel: '11 окт. 2026',
+        members: [{ name: 'Иван РП', roleLabel: 'РП ОРДИКС' }],
+      },
+      [
+        { title: 'Цель', body: '<p>текст</p>' },
+        { title: 'Пустой', body: '' },
+      ],
+    )
+    expect(html).toContain('<meta charset="utf-8">')
+    expect(html).toContain('Обследование «Завод»')
+    expect(html).toContain('<li>Иван РП — РП ОРДИКС</li>')
+    expect(html).toContain('<h2>1. Цель</h2><p>текст</p>')
+    expect(html).toContain('<h2>2. Пустой</h2><p>—</p>')
   })
 })
