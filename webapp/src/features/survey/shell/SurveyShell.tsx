@@ -51,6 +51,7 @@ import {
   type SurveyViewRole,
 } from '../model'
 import { NotificationsBell } from './NotificationsBell'
+import { GlobalSearch } from './GlobalSearch'
 
 /** Ссылка навигации опроса: закрывает мобильный сайдбар после клика. */
 export function SurveyLink({
@@ -241,6 +242,7 @@ export function SurveyShell({
               ) : null}
             </div>
             <div className="ml-auto flex items-center gap-2">
+              {projectId ? <GlobalSearch projectId={projectId} /> : null}
               {projectId && projects.length > 1 ? (
                 <Select onValueChange={switchProject} value={projectId}>
                   <SelectTrigger

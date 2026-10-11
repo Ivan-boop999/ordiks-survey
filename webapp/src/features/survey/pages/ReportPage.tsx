@@ -724,19 +724,19 @@ function FormatToolbar({
       data-testid="report-format-toolbar"
     >
       <Button aria-label="Полужирный" onClick={() => wrap('<strong>', '</strong>')} size="xs" variant="ghost">
-        <span className="font-bold">Ж</span>
+        <Typography as="span" variant="bodySmMedium">Ж</Typography>
       </Button>
       <Button aria-label="Курсив" onClick={() => wrap('<em>', '</em>')} size="xs" variant="ghost">
-        <span className="italic">К</span>
+        <Typography as="span" className="italic" variant="bodySm">К</Typography>
       </Button>
       <Button aria-label="Подчёркнутый" onClick={() => wrap('<u>', '</u>')} size="xs" variant="ghost">
-        <span className="underline">Ч</span>
+        <Typography as="span" className="underline" variant="bodySm">Ч</Typography>
       </Button>
       <Button aria-label="Заголовок 2" onClick={() => wrap('<h2>', '</h2>')} size="xs" variant="ghost">
-        H2
+        <Typography as="span" variant="bodySm">H2</Typography>
       </Button>
       <Button aria-label="Заголовок 3" onClick={() => wrap('<h3>', '</h3>')} size="xs" variant="ghost">
-        H3
+        <Typography as="span" variant="bodySm">H3</Typography>
       </Button>
       <Button
         aria-label="Маркированный список"
@@ -744,7 +744,7 @@ function FormatToolbar({
         size="xs"
         variant="ghost"
       >
-        • Список
+        <Typography as="span" variant="bodySm">• Список</Typography>
       </Button>
       <Button
         aria-label="Нумерованный список"
@@ -752,16 +752,16 @@ function FormatToolbar({
         size="xs"
         variant="ghost"
       >
-        1. Список
+        <Typography as="span" variant="bodySm">1. Список</Typography>
       </Button>
       <Button aria-label="Таблица" onClick={() => setTableOpen(true)} size="xs" variant="ghost">
-        Таблица
+        <Typography as="span" variant="bodySm">Таблица</Typography>
       </Button>
       <Button aria-label="Ссылка" onClick={() => setLinkOpen(true)} size="xs" variant="ghost">
-        Ссылка
+        <Typography as="span" variant="bodySm">Ссылка</Typography>
       </Button>
       <Button aria-label="Разделитель" onClick={() => insert('<hr>')} size="xs" variant="ghost">
-        ―
+        <Typography as="span" variant="bodySm">―</Typography>
       </Button>
 
       {tableOpen ? (
