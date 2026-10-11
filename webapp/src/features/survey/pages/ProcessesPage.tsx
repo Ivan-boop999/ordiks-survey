@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -56,6 +56,7 @@ import {
   useDeleteProcessSchemeMutation,
   useProcessesQuery,
   useReorderProcessStepsMutation,
+  useUpdateProcessMutation,
   useUpdateProcessStepMutation,
   useUploadProcessSchemeMutation,
 } from '../queries'
@@ -87,6 +88,20 @@ export function ProcessesPage() {
         description="Шаги «как есть» и «как будет», схемы из StormBPMN и сравнение сторон с переназначением шагов."
         title="Процессы AS-IS / TO-BE"
       />
+
+      {process ? (
+        // Название текущего процесса видно всегда — раньше при единственном процессе
+        // селект скрывался и пользователь не понимал, что редактирует (аудит).
+        <div className="flex flex-wrap items-center gap-2">
+          <Typography as="p" tone="muted" variant="bodySm">
+            Текущий процесс:{' '}
+            <Typography as="span" variant="bodySmMedium">
+              {process.name}
+            </Typography>
+          </Typography>
+          {canEdit ? <ProcessRenameInline process={process} /> : null}
+        </div>
+      ) : null}
 
       {processes.length > 1 ? (
         <Select
@@ -142,6 +157,9 @@ export function ProcessesPage() {
 function ProcessTabs({ canEdit, process }: { canEdit: boolean; process: ProcessDto }) {
   const deleteProcess = useDeleteProcessMutation(process.projectId)
   const [zoom, setZoom] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const stepCount =
+    stepsOfSide(process, 'asis').length + stepsOfSide(process, 'tobe').length
 
   return (
     <Tabs defaultValue="asis">
@@ -167,22 +185,81 @@ function ProcessTabs({ canEdit, process }: { canEdit: boolean; process: ProcessD
       </TabsContent>
       {canEdit ? (
         <div className="mt-4">
-          <Button
-            onClick={() =>
-              deleteProcess.mutate(process.id, {
-                onSuccess: () => toast.success('Процесс удалён'),
-                onError: (error: Error) => toast.error(error.message),
-              })
-            }
-            variant="ghost"
-          >
+          <Button onClick={() => setConfirmingDelete(true)} variant="ghost">
             <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
             Удалить процесс
           </Button>
         </div>
       ) : null}
+      <ConfirmDeleteDialog
+        description={`Будут удалены шаги обеих сторон (${stepCount}) и загруженные схемы.`}
+        onConfirm={() =>
+          deleteProcess.mutate(process.id, {
+            onSuccess: () => {
+              toast.success('Процесс удалён')
+              setConfirmingDelete(false)
+            },
+            onError: (error: Error) => toast.error(error.message),
+          })
+        }
+        onOpenChange={setConfirmingDelete}
+        open={confirmingDelete}
+        pending={deleteProcess.isPending}
+        title={`Удалить процесс «${process.name}»?`}
+      />
       {zoom ? <ZoomOverlay onClose={() => setZoom(null)} url={zoom} /> : null}
     </Tabs>
+  )
+}
+
+/** Inline-переименование процесса: Enter сохраняет, Escape/потеря фокуса — отмена. */
+function ProcessRenameInline({ process }: { process: ProcessDto }) {
+  const rename = useUpdateProcessMutation(process.projectId)
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(process.name)
+
+  if (!editing) {
+    return (
+      <Button
+        aria-label="Переименовать процесс"
+        onClick={() => {
+          setName(process.name)
+          setEditing(true)
+        }}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <HugeiconsIcon icon={PencilIcon} strokeWidth={2} />
+      </Button>
+    )
+  }
+
+  const submit = () => {
+    const trimmed = name.trim()
+    setEditing(false)
+    if (!trimmed || trimmed === process.name) return
+    rename.mutate(
+      { processId: process.id, input: { name: trimmed } },
+      {
+        onSuccess: () => toast.success('Процесс переименован'),
+        onError: (error: Error) => toast.error(error.message),
+      },
+    )
+  }
+
+  return (
+    <Input
+      autoFocus
+      aria-label="Новое название процесса"
+      className="h-8 w-[240px]"
+      onBlur={submit}
+      onChange={(event) => setName(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') submit()
+        if (event.key === 'Escape') setEditing(false)
+      }}
+      value={name}
+    />
   )
 }
 
@@ -206,6 +283,7 @@ function SidePanel({
   const reorder = useReorderProcessStepsMutation(projectId)
   const deleteStep = useDeleteProcessStepMutation(projectId)
   const [editing, setEditing] = useState<ProcessStepDto | 'new' | null>(null)
+  const [deletingStep, setDeletingStep] = useState<ProcessStepDto | null>(null)
 
   const move = (index: number, direction: -1 | 1) => {
     const original = steps.map((step) => step.id)
@@ -292,12 +370,7 @@ function SidePanel({
                   </Button>
                   <Button
                     aria-label={`Удалить «${step.title}»`}
-                    onClick={() =>
-                      deleteStep.mutate(step.id, {
-                        onSuccess: () => toast.success('Шаг удалён'),
-                        onError: (error: Error) => toast.error(error.message),
-                      })
-                    }
+                    onClick={() => setDeletingStep(step)}
                     size="icon-sm"
                     variant="ghost"
                   >
@@ -318,6 +391,25 @@ function SidePanel({
           </Button>
         </div>
       ) : null}
+
+      <ConfirmDeleteDialog
+        onConfirm={() => {
+          if (!deletingStep) return
+          deleteStep.mutate(deletingStep.id, {
+            onSuccess: () => {
+              toast.success('Шаг удалён')
+              setDeletingStep(null)
+            },
+            onError: (error: Error) => toast.error(error.message),
+          })
+        }}
+        onOpenChange={(open) => {
+          if (!open) setDeletingStep(null)
+        }}
+        open={deletingStep !== null}
+        pending={deleteStep.isPending}
+        title={deletingStep ? `Удалить шаг «${deletingStep.title}»?` : ''}
+      />
 
       <SchemePanel
         canEdit={canEdit}
