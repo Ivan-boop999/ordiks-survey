@@ -68,6 +68,7 @@ import type {
   ProjectSummary,
   RequestStatus,
   StageDto,
+  TaskDto,
   TaskStatus,
   ThreadType,
   UpdateChecklistItemRequest,
@@ -459,21 +460,55 @@ export function useDeleteStageMutation(projectId: string) {
 
 export function useMoveStageMutation(projectId: string) {
   // Перестановка соседей: сервер считает sortOrder целым числом, свапаем значения.
-  return useSurveyMutation(
-    (
-      transport,
-      { stages, index, direction }: { stages: StageDto[]; index: number; direction: -1 | 1 },
-    ) => {
+  // Optimistic: карточки меняются местами мгновенно, при ошибке порядок откатывается.
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      stages,
+      index,
+      direction,
+    }: {
+      stages: StageDto[]
+      index: number
+      direction: -1 | 1
+    }) => {
       const target = stages[index]
       const neighbor = stages[index + direction]
       if (!target || !neighbor) return Promise.resolve(null)
       return Promise.all([
-        updateStage(transport, target.id, { sortOrder: neighbor.sortOrder }),
-        updateStage(transport, neighbor.id, { sortOrder: target.sortOrder }),
+        updateStage(auth.transport, target.id, { sortOrder: neighbor.sortOrder }),
+        updateStage(auth.transport, neighbor.id, { sortOrder: target.sortOrder }),
       ])
     },
-    () => [surveyQueryKeys.stages(projectId)],
-  )
+    onMutate: ({ stages, index, direction }) => {
+      const previous = queryClient.getQueryData<{ items: StageDto[] }>(
+        surveyQueryKeys.stages(projectId),
+      )
+      const target = stages[index]
+      const neighbor = stages[index + direction]
+      if (previous && target && neighbor) {
+        queryClient.setQueryData(surveyQueryKeys.stages(projectId), {
+          ...previous,
+          items: previous.items.map((stage) =>
+            stage.id === target.id
+              ? { ...stage, sortOrder: neighbor.sortOrder }
+              : stage.id === neighbor.id
+                ? { ...stage, sortOrder: target.sortOrder }
+                : stage,
+          ),
+        })
+      }
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(surveyQueryKeys.stages(projectId), context.previous)
+      }
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.stages(projectId) }),
+  })
 }
 
 // --- Задачи ---
@@ -494,11 +529,35 @@ export function useUpdateTaskMutation(projectId: string) {
 }
 
 export function useMoveTaskMutation(projectId: string) {
-  return useSurveyMutation(
-    (transport, { taskId, status }: { taskId: string; status: TaskStatus }) =>
-      updateTask(transport, taskId, { status }),
-    () => [surveyQueryKeys.tasks(projectId)],
-  )
+  // Optimistic-перенос в канбане: статус меняется в кэше мгновенно, при ошибке — откат.
+  const auth = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) =>
+      updateTask(auth.transport, taskId, { status }),
+    onMutate: async ({ taskId, status }) => {
+      await queryClient.cancelQueries({ queryKey: surveyQueryKeys.tasks(projectId) })
+      const previous = queryClient.getQueryData<{ items: TaskDto[] }>(
+        surveyQueryKeys.tasks(projectId),
+      )
+      if (previous) {
+        queryClient.setQueryData(surveyQueryKeys.tasks(projectId), {
+          ...previous,
+          items: previous.items.map((task) =>
+            task.id === taskId ? { ...task, status } : task,
+          ),
+        })
+      }
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(surveyQueryKeys.tasks(projectId), context.previous)
+      }
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: surveyQueryKeys.tasks(projectId) }),
+  })
 }
 
 export function useDeleteTaskMutation(projectId: string) {
