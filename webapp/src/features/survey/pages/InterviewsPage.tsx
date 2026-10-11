@@ -1,10 +1,11 @@
 import { ArrowRight01Icon, PlusIcon, TrashIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,7 +40,7 @@ import {
 } from '../queries'
 import { useAuth } from '@/features/auth'
 import { getInterview } from '../api'
-import type { GuideQuestionDto, GuideSectionDto, InterviewDetailDto } from '@ordiks-survey/contracts'
+import type { GuideQuestionDto, GuideSectionDto } from '@ordiks-survey/contracts'
 import { useGuidesQuery } from '../queries'
 
 /** Интервью: расписание, конспект, анкета по гайду с условными вопросами. */
@@ -47,18 +48,24 @@ export function InterviewsPage() {
   const { projectId, canEdit } = useSurveyProject()
   const interviewsQuery = useInterviewsQuery(projectId)
   const groupsQuery = useDomainGroupsQuery(projectId)
-  const [statusFilter, setStatusFilter] = useState('')
+  const guidesQuery = useGuidesQuery(projectId)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [creating, setCreating] = useState(false)
   const [viewingId, setViewingId] = useState<string | null>(null)
 
   const domains = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
+  const guideNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const guide of guidesQuery.data?.items ?? []) map.set(guide.id, guide.name)
+    return map
+  }, [guidesQuery.data])
   const items = interviewsQuery.data?.items
   const filtered = useMemo(
     () =>
       (items ?? [])
         .slice()
         .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
-        .filter((interview) => !statusFilter || interview.status === statusFilter),
+        .filter((interview) => statusFilter === 'all' || interview.status === statusFilter),
     [items, statusFilter],
   )
 
@@ -78,11 +85,12 @@ export function InterviewsPage() {
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select onValueChange={setStatusFilter} value={statusFilter || undefined}>
-          <SelectTrigger className="w-[200px]">
+        <Select onValueChange={setStatusFilter} value={statusFilter}>
+          <SelectTrigger className="w-[200px]" data-testid="interview-status-filter">
             <SelectValue placeholder="Все статусы" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">Все статусы</SelectItem>
             {Object.entries(INTERVIEW_STATUS_META).map(([key, meta]) => (
               <SelectItem key={key} value={key}>
                 {meta.label}
@@ -146,7 +154,11 @@ export function InterviewsPage() {
                   <TableCell>
                     {domains.find((d) => d.id === interview.domainId)?.name ?? '—'}
                   </TableCell>
-                  <TableCell>{interview.guideId ? '✓' : '—'}</TableCell>
+                  <TableCell className="max-w-[180px]">
+                    <Typography as="span" className="block truncate" tone="muted" variant="caption">
+                      {interview.guideId ? (guideNameById.get(interview.guideId) ?? 'Гайд') : '—'}
+                    </Typography>
+                  </TableCell>
                   <TableCell>
                     <StatusChip color={meta.color}>{meta.label}</StatusChip>
                   </TableCell>
@@ -168,6 +180,7 @@ export function InterviewsPage() {
       {viewingId ? (
         <InterviewViewDialog
           interviewId={viewingId}
+          key={viewingId}
           onOpenChange={(open) => {
             if (!open) setViewingId(null)
           }}
@@ -313,42 +326,82 @@ function InterviewViewDialog({
   interviewId: string
 }) {
   const auth = useAuth()
-  const { canEdit } = useSurveyProject()
-  const [detail, setDetail] = useState<InterviewDetailDto | null>(null)
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({})
-  const updateInterview = useUpdateInterviewMutation(detail?.projectId ?? '')
-  const deleteInterview = useDeleteInterviewMutation(detail?.projectId ?? '')
-  const saveAnswers = useSaveAnswersMutation(detail?.projectId ?? '')
-  const guidesQuery = useGuidesQuery(detail?.projectId ?? '')
+  const { projectId, canEdit } = useSurveyProject()
+  // Детали через react-query: кэш 30 с убирает вспышку «Загружаем…» при повторном
+  // открытии (раньше — ручной fetch без кэша на каждый показ диалога).
+  const detailQuery = useQuery({
+    queryKey: ['interview', projectId, interviewId],
+    queryFn: () => getInterview(auth.transport, interviewId),
+    enabled: open && projectId.length > 0,
+    staleTime: 30_000,
+  })
+  const detail = detailQuery.data ?? null
+  const [answers, setAnswers] = useState<Record<string, string | string[]> | null>(null)
+  // Черновик конспекта: null — не правился, иначе — текущий текст. Dirty-флаг не даёт
+  // потерять конспект при случайном закрытии диалога.
+  const [notesDraft, setNotesDraft] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  const updateInterview = useUpdateInterviewMutation(projectId)
+  const deleteInterview = useDeleteInterviewMutation(projectId)
+  const saveAnswers = useSaveAnswersMutation(projectId)
+  const guidesQuery = useGuidesQuery(projectId)
 
   useEffect(() => {
-    let alive = true
-    getInterview(auth.transport, interviewId).then((result) => {
-      if (!alive) return
-      setDetail(result)
+    if (!detail) return
+    setAnswers((previous) => {
+      if (previous) return previous
       const initial: Record<string, string | string[]> = {}
-      for (const answer of result.answers) {
+      for (const answer of detail.answers) {
         initial[answer.questionId] = answer.value as string | string[]
       }
-      setAnswers(initial)
+      return initial
     })
-    return () => {
-      alive = false
+  }, [detail])
+
+  const notesDirty = notesDraft !== null && detail !== null && notesDraft !== detail.notes
+
+  const requestClose = () => {
+    if (notesDirty) {
+      setConfirmingClose(true)
+      return
     }
-  }, [auth.transport, interviewId])
+    onOpenChange(false)
+  }
+
+  const saveNotes = (then: () => void) => {
+    if (!detail || notesDraft === null) {
+      then()
+      return
+    }
+    updateInterview.mutate(
+      { interviewId: detail.id, notes: notesDraft },
+      {
+        onSuccess: () => {
+          toast.success('Конспект сохранён')
+          setNotesDraft(null)
+          then()
+        },
+        onError: (error: Error) => {
+          toast.error(error.message)
+          setConfirmingClose(false)
+        },
+      },
+    )
+  }
 
   const guides = guidesQuery.data?.items ?? []
   const guide = detail?.guideId ? guides.find((item: { id: string }) => item.id === detail.guideId) : null
 
   const isConditionMet = (question: GuideQuestionDto): boolean => {
     if (!question.showIfQuestionId || !question.showIfValue) return true
-    const answer = answers[question.showIfQuestionId]
+    const answer = answers?.[question.showIfQuestionId]
     return answer === question.showIfValue
   }
 
   const setAnswer = (questionId: string, value: string | string[]) => {
     setAnswers((previous) => {
-      const next = { ...previous }
+      const next = { ...(previous ?? {}) }
       if (value === '' || (Array.isArray(value) && value.length === 0)) delete next[questionId]
       else next[questionId] = value
       return next
@@ -356,7 +409,7 @@ function InterviewViewDialog({
   }
 
   const submitAnswers = () => {
-    if (!detail) return
+    if (!detail || !answers) return
     const payload = Object.entries(answers)
       .filter(([, value]) => value !== '' && !(Array.isArray(value) && value.length === 0))
       .map(([questionId, value]) => ({ questionId, value }))
@@ -365,7 +418,7 @@ function InterviewViewDialog({
       {
         onSuccess: (result) => {
           toast.success(`Сохранено ответов: ${result.saved}`)
-          setDetail(result.interview)
+          detailQuery.refetch()
         },
         onError: (error: Error) => toast.error(error.message),
       },
@@ -374,16 +427,18 @@ function InterviewViewDialog({
 
   if (!detail) {
     return (
-      <Dialog onOpenChange={onOpenChange} open={open}>
+      <Dialog onOpenChange={(openValue) => (!openValue ? requestClose() : undefined)} open={open}>
         <DialogContent>
-          <Typography tone="muted">Загружаем интервью…</Typography>
+          <Typography tone="muted">
+            {detailQuery.isPending ? 'Загружаем интервью…' : 'Не удалось загрузить интервью.'}
+          </Typography>
         </DialogContent>
       </Dialog>
     )
   }
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog onOpenChange={(openValue) => (!openValue ? requestClose() : undefined)} open={open}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{detail.respondent}</DialogTitle>
@@ -400,7 +455,7 @@ function InterviewViewDialog({
                   updateInterview.mutate(
                     { interviewId: detail.id, status: 'done' },
                     {
-                      onSuccess: () => setDetail({ ...detail, status: 'done' }),
+                      onSuccess: () => detailQuery.refetch(),
                       onError: (error: Error) => toast.error(error.message),
                     },
                   )
@@ -417,7 +472,7 @@ function InterviewViewDialog({
                   updateInterview.mutate(
                     { interviewId: detail.id, status: 'formatted' },
                     {
-                      onSuccess: () => setDetail({ ...detail, status: 'formatted' }),
+                      onSuccess: () => detailQuery.refetch(),
                       onError: (error: Error) => toast.error(error.message),
                     },
                   )
@@ -428,23 +483,67 @@ function InterviewViewDialog({
                 Оформлено
               </Button>
             ) : null}
-            <Button
-              onClick={() =>
-                deleteInterview.mutate(detail.id, {
-                  onSuccess: () => {
-                    toast.success('Интервью удалено')
-                    onOpenChange(false)
-                  },
-                  onError: (error: Error) => toast.error(error.message),
-                })
-              }
-              size="sm"
-              variant="ghost"
-            >
+            <Button onClick={() => setConfirmingDelete(true)} size="sm" variant="ghost">
               <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
               Удалить
             </Button>
           </div>
+        ) : null}
+
+        <ConfirmDeleteDialog
+          description={`Конспект и ответы анкеты будут удалены безвозвратно.`}
+          onConfirm={() =>
+            deleteInterview.mutate(detail.id, {
+              onSuccess: () => {
+                toast.success('Интервью удалено')
+                setNotesDraft(null)
+                onOpenChange(false)
+              },
+              onError: (error: Error) => toast.error(error.message),
+            })
+          }
+          onOpenChange={setConfirmingDelete}
+          open={confirmingDelete}
+          pending={deleteInterview.isPending}
+          title={`Удалить интервью с ${detail.respondent}?`}
+        />
+
+        {confirmingClose ? (
+          <Dialog onOpenChange={(openValue) => (!openValue ? setConfirmingClose(false) : undefined)} open>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Сохранить конспект перед закрытием?</DialogTitle>
+                <DialogDescription>
+                  В конспекте есть несохранённые правки — при закрытии без сохранения они пропадут.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button onClick={() => setConfirmingClose(false)} variant="ghost">
+                  Остаться
+                </Button>
+                <Button
+                  onClick={() => {
+                    setNotesDraft(null)
+                    setConfirmingClose(false)
+                    onOpenChange(false)
+                  }}
+                  variant="outline"
+                >
+                  Закрыть без сохранения
+                </Button>
+                <Button
+                  data-testid="interview-notes-save-close"
+                  disabled={updateInterview.isPending}
+                  onClick={() => saveNotes(() => {
+                    setConfirmingClose(false)
+                    onOpenChange(false)
+                  })}
+                >
+                  Сохранить и закрыть
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         ) : null}
 
         {canEdit ? (
@@ -452,22 +551,14 @@ function InterviewViewDialog({
             <FieldLabel htmlFor="interview-notes">Конспект</FieldLabel>
             <Textarea
               id="interview-notes"
-              onChange={(event) => setDetail({ ...detail, notes: event.target.value })}
+              onChange={(event) => setNotesDraft(event.target.value)}
               rows={4}
-              value={detail.notes}
+              value={notesDraft ?? detail.notes}
             />
             <Button
               className="mt-2"
               disabled={updateInterview.isPending}
-              onClick={() =>
-                updateInterview.mutate(
-                  { interviewId: detail.id, notes: detail.notes },
-                  {
-                    onSuccess: () => toast.success('Конспект сохранён'),
-                    onError: (error: Error) => toast.error(error.message),
-                  },
-                )
-              }
+              onClick={() => saveNotes(() => undefined)}
               size="sm"
               variant="outline"
             >
@@ -498,7 +589,7 @@ function InterviewViewDialog({
                     if (!visible) return null
                     return (
                       <QuestionInput
-                        answer={answers[question.id]}
+                        answer={answers?.[question.id]}
                         key={question.id}
                         onAnswer={(value) => setAnswer(question.id, value)}
                         question={question}
