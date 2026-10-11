@@ -200,6 +200,33 @@ test('dashboard KPIs hide the team coverage card from client and observer', () =
   expect(observerCards.find((card) => card.key === 'requests')?.label).toBe('Запросы к заказчику')
 })
 
+test('report approval KPI: сводка виз показывается команде с готовым отчётом', () => {
+  const input = {
+    coverage: coverageOf([domainGroup()]),
+    findings: [],
+    findingStatuses,
+    requests: [] as DataRequestDto[],
+    userId: 'user-1',
+    stages: [] as StageDto[],
+    interviews: [],
+    reportReadiness: { sections: 6, agreed: 4, withIssues: 1, pending: [] },
+  }
+
+  const teamCards = dashboardKpis({ ...input, viewRole: 'team' })
+  const reportCard = teamCards.find((card) => card.key === 'report')
+  expect(reportCard).toMatchObject({ label: 'Согласование отчёта', value: '4 из 6', tone: 'warn' })
+
+  // Клиенту и без сводки виз карточки нет.
+  expect(dashboardKpis({ ...input, viewRole: 'client' }).some((card) => card.key === 'report')).toBe(
+    false,
+  )
+  expect(
+    dashboardKpis({ ...input, viewRole: 'team', reportReadiness: null }).some(
+      (card) => card.key === 'report',
+    ),
+  ).toBe(false)
+})
+
 test('kanban partition keeps the four fixed columns in order', () => {
   const task = (id: string, status: TaskDto['status']): TaskDto => ({
     id,

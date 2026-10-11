@@ -53,9 +53,12 @@ describe('маршруты уведомлений', () => {
     expect(notificationTargetPath('processes', 'p1')).toBe('/survey/p/p1/processes')
   })
 
-  test('неизвестный маршрут (например, registries до своей волны) ведёт на дашборд', () => {
-    expect(notificationTargetPath('registries', 'p1')).toBe('/survey/p/p1/dashboard')
+  test('неизвестный маршрут ведёт на дашборд', () => {
     expect(notificationTargetPath('something-new', 'p1')).toBe('/survey/p/p1/dashboard')
+  })
+
+  test('route registries ведёт в раздел своих реестров', () => {
+    expect(notificationTargetPath('registries', 'p1')).toBe('/survey/p/p1/registries')
   })
 })
 
