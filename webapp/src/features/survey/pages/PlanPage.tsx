@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { StatusChip, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -403,6 +403,7 @@ function TaskListTable({
   const { projectId } = useSurveyProject()
   const deleteTask = useDeleteTaskMutation(projectId)
   const { detail } = useSurveyProject()
+  const [deleting, setDeleting] = useState<TaskDto | null>(null)
   const domainName = (domainId: string | null) =>
     domains.find((domain) => domain.id === domainId)?.name
   const stageName = (stageId: string | null) =>
@@ -489,15 +490,7 @@ function TaskListTable({
                         </Button>
                         <Button
                           aria-label={`Удалить «${task.title}»`}
-                          disabled={deleteTask.isPending}
-                          onClick={() => {
-                            if (window.confirm(`Удалить задачу «${task.title}»?`)) {
-                              deleteTask.mutate(task.id, {
-                                onSuccess: () => toast.success('Задача удалена'),
-                                onError: (error) => toast.error(error.message),
-                              })
-                            }
-                          }}
+                          onClick={() => setDeleting(task)}
                           size="icon-xs"
                           variant="ghost"
                         >
@@ -512,6 +505,24 @@ function TaskListTable({
           )}
         </TableBody>
       </Table>
+      <ConfirmDeleteDialog
+        onConfirm={() => {
+          if (!deleting) return
+          deleteTask.mutate(deleting.id, {
+            onSuccess: () => {
+              toast.success('Задача удалена')
+              setDeleting(null)
+            },
+            onError: (error) => toast.error(error.message),
+          })
+        }}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null)
+        }}
+        open={deleting !== null}
+        pending={deleteTask.isPending}
+        title={deleting ? `Удалить задачу «${deleting.title}»?` : ''}
+      />
     </div>
   )
 }

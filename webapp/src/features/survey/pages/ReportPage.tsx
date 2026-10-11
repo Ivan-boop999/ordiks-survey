@@ -12,7 +12,7 @@ import type { ReportInsertKind, ReportSectionDto } from '@ordiks-survey/contract
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { StatusChip, UserAvatar } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -489,20 +489,34 @@ function InsertButtons({ section }: { section: ReportSectionDto }) {
 function DeleteSectionButton({ section }: { section: ReportSectionDto }) {
   const { projectId } = useSurveyProject()
   const del = useDeleteReportSectionMutation(projectId)
+  const [confirming, setConfirming] = useState(false)
   return (
-    <Button
-      aria-label={`Удалить «${section.title}»`}
-      onClick={() =>
-        del.mutate(section.id, {
-          onSuccess: () => toast.success('Раздел удалён'),
-          onError: (error: Error) => toast.error(error.message),
-        })
-      }
-      size="icon-sm"
-      variant="ghost"
-    >
-      <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
-    </Button>
+    <>
+      <Button
+        aria-label={`Удалить «${section.title}»`}
+        onClick={() => setConfirming(true)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
+      </Button>
+      <ConfirmDeleteDialog
+        description="Тело раздела и визы будут удалены безвозвратно."
+        onConfirm={() =>
+          del.mutate(section.id, {
+            onSuccess: () => {
+              toast.success('Раздел удалён')
+              setConfirming(false)
+            },
+            onError: (error: Error) => toast.error(error.message),
+          })
+        }
+        onOpenChange={setConfirming}
+        open={confirming}
+        pending={del.isPending}
+        title={`Удалить раздел «${section.title}»?`}
+      />
+    </>
   )
 }
 
