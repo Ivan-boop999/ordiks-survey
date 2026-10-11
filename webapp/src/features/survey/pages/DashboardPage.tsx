@@ -219,9 +219,15 @@ export function DashboardPage() {
                 <WaitingRequestRow key={request.id} projectId={projectId} request={request} />
               ))}
               {waiting.length > 6 ? (
-                <Typography as="p" tone="muted" variant="caption">
-                  …и ещё {waiting.length - 6}
-                </Typography>
+                <Link
+                  className="justify-self-start text-primary hover:underline"
+                  data-testid="dashboard-waiting-more"
+                  to={sectionHref('requests')}
+                >
+                  <Typography as="span" tone="primary" variant="caption">
+                    …и ещё {waiting.length - 6}
+                  </Typography>
+                </Link>
               ) : null}
             </div>
           )}
@@ -315,7 +321,17 @@ export function DashboardPage() {
       ) : null}
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        <SectionCard title="Ближайшие интервью">
+        <SectionCard
+          title="Ближайшие интервью"
+          actions={
+            <Button asChild size="xs" variant="ghost">
+              <Link to={sectionHref('interviews')}>
+                Все интервью
+                <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+              </Link>
+            </Button>
+          }
+        >
           {upcomingInterviews.length === 0 ? (
             <Typography as="p" tone="muted" variant="bodySm">
               Интервью пока не запланированы.

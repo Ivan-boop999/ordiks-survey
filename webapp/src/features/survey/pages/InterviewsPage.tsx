@@ -186,9 +186,10 @@ export function InterviewsPage() {
           <TableBody>
             {filtered.map((interview) => {
               const meta = INTERVIEW_STATUS_META[interview.status]
+              const today = isSameDay(new Date(interview.scheduledAt), new Date())
               return (
                 <TableRow
-                  className="cursor-pointer"
+                  className={`cursor-pointer odd:bg-muted/40 ${today ? 'bg-accent/50' : ''}`}
                   data-interview-respondent={interview.respondent}
                   key={interview.id}
                   onClick={() => setViewingId(interview.id)}
@@ -197,9 +198,12 @@ export function InterviewsPage() {
                     {formatDateTimeRu(interview.scheduledAt)}
                   </TableCell>
                   <TableCell>
-                    <Typography as="div" variant="control">
-                      {interview.respondent}
-                    </Typography>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Typography as="div" variant="control">
+                        {interview.respondent}
+                      </Typography>
+                      {today ? <StatusChip color="blue">сегодня</StatusChip> : null}
+                    </div>
                     {interview.respondentRole ? (
                       <Typography as="p" tone="muted" variant="caption">
                         {interview.respondentRole}

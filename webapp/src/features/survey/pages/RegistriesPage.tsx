@@ -397,6 +397,9 @@ function RegistryDetail({ onBack, registry }: { onBack: () => void; registry: Re
               <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
               Печать
             </Button>
+            <Typography as="span" className="hidden sm:inline" tone="muted" variant="caption">
+              печатается как на экране (с фильтрами)
+            </Typography>
             {canEdit ? (
               <Button
                 data-testid="registry-import-open"
