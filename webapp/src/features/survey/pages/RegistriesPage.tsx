@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ColorDot, StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ColorDot, ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -203,21 +203,37 @@ export function RegistriesPage() {
 function DeleteRegistryButton({ registry }: { registry: RegistryDto }) {
   const { projectId } = useSurveyProject()
   const del = useDeleteRegistryMutation(projectId)
+  const [confirming, setConfirming] = useState(false)
   return (
-    <Button
-      aria-label={`Удалить «${registry.name}»`}
-      onClick={(event) => {
-        event.stopPropagation()
-        del.mutate(registry.id, {
-          onSuccess: () => toast.success('Реестр удалён'),
-          onError: (error: Error) => toast.error(error.message),
-        })
-      }}
-      size="icon-sm"
-      variant="ghost"
-    >
-      <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
+    <>
+      <Button
+        aria-label={`Удалить «${registry.name}»`}
+        onClick={(event) => {
+          event.stopPropagation()
+          setConfirming(true)
+        }}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
     </Button>
+      <ConfirmDeleteDialog
+        description="Будут удалены все записи реестра и его настройка (поля, статусы)."
+        onConfirm={() =>
+          del.mutate(registry.id, {
+            onSuccess: () => {
+              toast.success('Реестр удалён')
+              setConfirming(false)
+            },
+            onError: (error: Error) => toast.error(error.message),
+          })
+        }
+        onOpenChange={setConfirming}
+        open={confirming}
+        pending={del.isPending}
+        title={`Удалить реестр «${registry.name}»?`}
+      />
+    </>
   )
 }
 
@@ -321,7 +337,7 @@ function RegistryDetail({ onBack, registry }: { onBack: () => void; registry: Re
   }, [searchInput])
 
   const entriesQuery = useRegistryEntriesQuery(registry.id, {
-    statusId: statusFilter || undefined,
+    statusId: statusFilter && statusFilter !== 'all' ? statusFilter : undefined,
     q: search || undefined,
   })
   const fields = sortedFields(registry.fields)
@@ -400,11 +416,12 @@ function RegistryDetail({ onBack, registry }: { onBack: () => void; registry: Re
       {canEdit ? <Constructor registry={registry} /> : null}
 
       <div className="flex flex-wrap items-center gap-2 report-print-hidden">
-        <Select onValueChange={setStatusFilter} value={statusFilter || undefined}>
+        <Select onValueChange={setStatusFilter} value={statusFilter || 'all'}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Все статусы" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">Все статусы</SelectItem>
             {statuses.map((status) => (
               <SelectItem key={status.id} value={status.id}>
                 {status.name}
