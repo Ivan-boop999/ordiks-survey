@@ -7,7 +7,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ChipColor, FactType, InviteDto, MemberRole } from '@ordiks-survey/contracts'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
@@ -431,18 +431,18 @@ function InvitesTab({
   onNoteSeedConsumed: () => void
 }) {
   const invitesQuery = useInvitesQuery()
-  const [creating, setCreating] = useState(false)
-  const [initialNote, setInitialNote] = useState('')
+  // Переход «Пригласить участника» из вкладки «Участники»: сид открывает диалог создания
+  // с предзаполненным примечанием. Корректировка при рендере (без эффекта): повторный
+  // сид при уже открытой вкладке тоже срабатывает; гасится сид закрытием диалога.
+  const [creating, setCreating] = useState(noteSeed !== null)
+  const [initialNote, setInitialNote] = useState(noteSeed ?? '')
+  const [lastSeed, setLastSeed] = useState<string | null>(noteSeed)
+  if (noteSeed !== lastSeed) {
+    setLastSeed(noteSeed)
+    setInitialNote(noteSeed ?? '')
+    setCreating(noteSeed !== null)
+  }
   const invites = invitesQuery.data?.items ?? []
-
-  // Переход «Пригласить участника» из вкладки «Участники»: сразу открыть диалог
-  // создания с предзаполненным примечанием.
-  useEffect(() => {
-    if (noteSeed === null) return
-    setInitialNote(noteSeed)
-    setCreating(true)
-    onNoteSeedConsumed()
-  }, [noteSeed, onNoteSeedConsumed])
 
   return (
     <SectionCard
@@ -474,7 +474,10 @@ function InvitesTab({
         <InviteCreateDialog
           initialNote={initialNote}
           onOpenChange={(open) => {
-            if (!open) setCreating(false)
+            if (!open) {
+              setCreating(false)
+              onNoteSeedConsumed()
+            }
           }}
           open
         />

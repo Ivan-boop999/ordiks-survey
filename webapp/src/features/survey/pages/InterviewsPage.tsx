@@ -1,7 +1,7 @@
 import { ArrowRight01Icon, PlusIcon, TrashIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
@@ -340,6 +340,15 @@ function InterviewViewDialog({
   })
   const detail = detailQuery.data ?? null
   const [answers, setAnswers] = useState<Record<string, string | string[]> | null>(null)
+  // Инициализация ответов анкеты при первом получении деталей — паттерном «корректировка
+  // состояния при рендере» (как в ChecklistDialog): без эффекта и каскадных перерисовок.
+  if (detail && answers === null) {
+    const initial: Record<string, string | string[]> = {}
+    for (const answer of detail.answers) {
+      initial[answer.questionId] = answer.value as string | string[]
+    }
+    setAnswers(initial)
+  }
   // Черновик конспекта: null — не правился, иначе — текущий текст. Dirty-флаг не даёт
   // потерять конспект при случайном закрытии диалога.
   const [notesDraft, setNotesDraft] = useState<string | null>(null)
@@ -349,18 +358,6 @@ function InterviewViewDialog({
   const deleteInterview = useDeleteInterviewMutation(projectId)
   const saveAnswers = useSaveAnswersMutation(projectId)
   const guidesQuery = useGuidesQuery(projectId)
-
-  useEffect(() => {
-    if (!detail) return
-    setAnswers((previous) => {
-      if (previous) return previous
-      const initial: Record<string, string | string[]> = {}
-      for (const answer of detail.answers) {
-        initial[answer.questionId] = answer.value as string | string[]
-      }
-      return initial
-    })
-  }, [detail])
 
   const notesDirty = notesDraft !== null && detail !== null && notesDraft !== detail.notes
 
