@@ -25,6 +25,7 @@ import {
   MilestoneIcon,
   PassportIcon,
   Settings01Icon,
+  Table01Icon,
   WorkflowIcon,
 } from '@hugeicons/core-free-icons'
 
@@ -94,6 +95,7 @@ export const SURVEY_SECTIONS = [
   'findings',
   'processes',
   'analytics',
+  'registries',
   'report',
   'settings',
 ] as const
@@ -135,6 +137,7 @@ export const SURVEY_SECTION_GROUPS: ReadonlyArray<{
       { id: 'findings', label: 'Находки', icon: AlertCircleIcon, mobile: true },
       { id: 'processes', label: 'Процессы', icon: WorkflowIcon },
       { id: 'analytics', label: 'Аналитика', icon: ChartLineIcon },
+      { id: 'registries', label: 'Свои реестры', icon: Table01Icon, teamOnly: true },
       { id: 'report', label: 'Отчёт', icon: Doc01Icon },
     ],
   },
@@ -407,6 +410,35 @@ export const MOSCOW_META: Record<'must' | 'should' | 'could' | 'wont', { label: 
   should: { label: 'Should', color: 'amber' },
   could: { label: 'Could', color: 'blue' },
   wont: { label: "Won't", color: 'gray' },
+}
+
+export const DECISION_STATUS_META: Record<'active' | 'superseded', { label: string; color: ChipColor }> = {
+  active: { label: 'Действует', color: 'green' },
+  superseded: { label: 'Заменено', color: 'gray' },
+}
+
+export const COMMUNICATION_KIND_META: Record<'meeting' | 'call' | 'email', { label: string; color: ChipColor }> = {
+  meeting: { label: 'Встреча', color: 'blue' },
+  call: { label: 'Звонок', color: 'purple' },
+  email: { label: 'Письмо', color: 'amber' },
+}
+
+export const QUICK_WIN_STATUS_META: Record<'suggested' | 'accepted' | 'done', { label: string; color: ChipColor }> = {
+  suggested: { label: 'Предложено', color: 'blue' },
+  accepted: { label: 'Принято', color: 'amber' },
+  done: { label: 'Сделано', color: 'green' },
+}
+
+/** Типы полей конструктора своих реестров (label — для селектов и таблицы полей). */
+export const REGISTRY_FIELD_TYPE_META: Record<
+  'text' | 'number' | 'date' | 'select' | 'formula',
+  { label: string }
+> = {
+  text: { label: 'Текст' },
+  number: { label: 'Число' },
+  date: { label: 'Дата' },
+  select: { label: 'Список' },
+  formula: { label: 'Формула' },
 }
 
 export const REPORT_APPROVAL_META: Record<'approved' | 'changes', { label: string; color: ChipColor }> = {

@@ -29,6 +29,7 @@ export {
   SettingsPage,
   ProcessesPage,
   AnalyticsPage,
+  RegistriesPage,
   ReportPage,
 } from './pages/Exports'
 export { SurveyShell } from './shell/SurveyShell'

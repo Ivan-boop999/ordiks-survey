@@ -18,6 +18,7 @@ import { FindingsPage } from './pages/FindingsPage'
 import { GuidesPage } from './pages/GuidesPage'
 import { InterviewsPage } from './pages/InterviewsPage'
 import { ProcessesPage } from './pages/ProcessesPage'
+import { RegistriesPage } from './pages/RegistriesPage'
 import { ReportPage } from './pages/ReportPage'
 import { RequestsPage } from './pages/RequestsPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -172,6 +173,8 @@ export function SurveySectionPage() {
       return <ProcessesPage />
     case 'analytics':
       return <AnalyticsPage />
+    case 'registries':
+      return <RegistriesPage />
     case 'report':
       return <ReportPage />
     case 'settings':
