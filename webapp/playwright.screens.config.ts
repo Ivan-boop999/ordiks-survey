@@ -1,7 +1,7 @@
 import { createServer } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
-import e2eConfig from './playwright.config'
+import e2eConfig from './e2e/vibe.config'
 
 // `bun run screens`: the E2E stack (test database, backend, Vite) and the Astro website run a
 // screenshot tour instead of the specs. Images land in e2e/.artifacts/screens. See docs/UI.md.

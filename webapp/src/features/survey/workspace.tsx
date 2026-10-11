@@ -1,4 +1,4 @@
-import { useLocation, useParams, useRouter } from '@tanstack/react-router'
+import { Outlet, useLocation, useParams, useRouter } from '@tanstack/react-router'
 import { useEffect } from 'react'
 
 import { SessionErrorSection, SessionLoadingSection } from '@/components/WebRouteSections'
@@ -96,7 +96,11 @@ export function SurveyWorkspaceLayout() {
         section={section}
         user={user}
         viewRole={viewRole}
-      />
+      >
+        {/* Дочерние маршруты (/survey, /survey/projects, /survey/p/$projectId/$section):
+            без Outlet оболочка съедала всё содержимое разделов. */}
+        <Outlet />
+      </SurveyShell>
     </SurveyProjectGate>
   )
 }
