@@ -1,11 +1,22 @@
-import { ArrowRight01Icon, PlusIcon, TrashIcon } from '@hugeicons/core-free-icons'
+import {
+  ArrowRight01Icon,
+  ArrowLeft01Icon,
+  Calendar03Icon,
+  PlusIcon,
+  TrashIcon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState, SurveyTableSkeleton } from '@/components/survey'
+import {
+  ConfirmDeleteDialog,
+  StatusChip,
+  SurveyEmptyState,
+  SurveyTableSkeleton,
+} from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,9 +51,20 @@ import {
 } from '../queries'
 import { useAuth } from '@/features/auth'
 import { getInterview } from '../api'
-import type { GuideQuestionDto, GuideSectionDto } from '@ordiks-survey/contracts'
+import type { GuideQuestionDto, GuideSectionDto, InterviewDto } from '@ordiks-survey/contracts'
 import { useGuidesQuery } from '../queries'
 import { useFocusTarget } from '../use-focus-target'
+import {
+  calendarHours,
+  isSameDay,
+  shiftWeek,
+  slotOf,
+  slotToDatetimeLocal,
+  startOfWeek,
+  weekDays,
+} from '../interviews-calendar'
+
+type InterviewView = 'table' | 'week'
 
 /** Интервью: расписание, конспект, анкета по гайду с условными вопросами. */
 export function InterviewsPage() {
@@ -51,7 +73,10 @@ export function InterviewsPage() {
   const groupsQuery = useDomainGroupsQuery(projectId)
   const guidesQuery = useGuidesQuery(projectId)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [view, setView] = useState<InterviewView>('table')
   const [creating, setCreating] = useState(false)
+  // Предзаполнение «когда» из клика по пустому слоту недельного календаря.
+  const [createAt, setCreateAt] = useState('')
   const [viewingId, setViewingId] = useState<string | null>(null)
 
   const domains = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
@@ -88,6 +113,25 @@ export function InterviewsPage() {
       />
 
       <div className="flex flex-wrap items-center gap-2">
+        <Button
+          aria-pressed={view === 'table'}
+          data-testid="interview-view-table"
+          onClick={() => setView('table')}
+          size="sm"
+          variant={view === 'table' ? 'secondary' : 'ghost'}
+        >
+          Таблица
+        </Button>
+        <Button
+          aria-pressed={view === 'week'}
+          data-testid="interview-view-week"
+          onClick={() => setView('week')}
+          size="sm"
+          variant={view === 'week' ? 'secondary' : 'ghost'}
+        >
+          <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} />
+          Неделя
+        </Button>
         <Select onValueChange={setStatusFilter} value={statusFilter}>
           <SelectTrigger className="w-[200px]" data-testid="interview-status-filter">
             <SelectValue placeholder="Все статусы" />
@@ -105,6 +149,16 @@ export function InterviewsPage() {
 
       {interviewsQuery.isPending ? (
         <SurveyTableSkeleton />
+      ) : view === 'week' ? (
+        <InterviewWeekCalendar
+          canCreate={canEdit}
+          interviews={filtered}
+          onCreate={(when) => {
+            setCreateAt(when)
+            setCreating(true)
+          }}
+          onOpen={(interviewId) => setViewingId(interviewId)}
+        />
       ) : filtered.length === 0 ? (
         <SurveyEmptyState
           action={
@@ -172,8 +226,12 @@ export function InterviewsPage() {
 
       {canEdit && creating ? (
         <InterviewDialog
+          initialWhen={createAt}
           onOpenChange={(open) => {
-            if (!open) setCreating(false)
+            if (!open) {
+              setCreating(false)
+              setCreateAt('')
+            }
           }}
           open
         />
@@ -192,12 +250,156 @@ export function InterviewsPage() {
   )
 }
 
+/**
+ * Недельный календарь интервью: сетка Пн–Вс × 8:00–20:00, интервью — блоками,
+ * конфликты (2+ в слоте) — красная рамка, клик по пустому слоту создаёт интервью
+ * с предзаполненными датой и временем. Навигация «‹ Неделя ›» и «Сегодня».
+ */
+function InterviewWeekCalendar({
+  canCreate,
+  interviews,
+  onCreate,
+  onOpen,
+}: {
+  canCreate: boolean
+  interviews: ReadonlyArray<InterviewDto>
+  onCreate: (when: string) => void
+  onOpen: (interviewId: string) => void
+}) {
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+  const days = useMemo(() => weekDays(weekStart), [weekStart])
+  const hours = calendarHours()
+  const today = new Date()
+
+  const bySlot = useMemo(() => {
+    const map = new Map<string, InterviewDto[]>()
+    for (const interview of interviews) {
+      const slot = slotOf(interview.scheduledAt, weekStart)
+      if (!slot) continue
+      const key = `${slot.dayIndex}-${slot.hour}`
+      const bucket = map.get(key) ?? []
+      bucket.push(interview)
+      map.set(key, bucket)
+    }
+    return map
+  }, [interviews, weekStart])
+
+  const weekLabel = `${days[0].toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} — ${days[6].toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`
+
+  return (
+    <div className="grid gap-2" data-testid="interview-week-calendar">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          aria-label="Предыдущая неделя"
+          onClick={() => setWeekStart(shiftWeek(weekStart, -1))}
+          size="icon-sm"
+          variant="outline"
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+        </Button>
+        <Typography as="span" className="min-w-32 text-center" variant="control">
+          {weekLabel}
+        </Typography>
+        <Button
+          aria-label="Следующая неделя"
+          onClick={() => setWeekStart(shiftWeek(weekStart, 1))}
+          size="icon-sm"
+          variant="outline"
+        >
+          <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+        </Button>
+        <Button onClick={() => setWeekStart(startOfWeek(new Date()))} size="sm" variant="ghost">
+          Сегодня
+        </Button>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border">
+        <div className="min-w-[720px]">
+          {/* Шапка дней */}
+          <div className="grid grid-cols-[56px_repeat(7,1fr)] border-b bg-muted/50">
+            <div />
+            {days.map((day) => (
+              <div
+                className={`px-2 py-1.5 text-center ${isSameDay(day, today) ? 'bg-primary/10' : ''}`}
+                key={day.toISOString()}
+              >
+                <Typography as="p" tone={isSameDay(day, today) ? 'primary' : 'muted'} variant="caption">
+                  {day.toLocaleDateString('ru-RU', { weekday: 'short' })}
+                </Typography>
+                <Typography as="p" className="tabular-nums" variant="controlXs">
+                  {day.getDate()}
+                </Typography>
+              </div>
+            ))}
+          </div>
+          {/* Строки часов */}
+          {hours.map((hour) => (
+            <div className="grid grid-cols-[56px_repeat(7,1fr)] border-b last:border-b-0" key={hour}>
+              <div className="border-r px-1 py-1.5 text-right">
+                <Typography as="span" className="tabular-nums" tone="muted" variant="caption">
+                  {String(hour).padStart(2, '0')}:00
+                </Typography>
+              </div>
+              {days.map((day, dayIndex) => {
+                const bucket = bySlot.get(`${dayIndex}-${hour}`) ?? []
+                const conflict = bucket.length > 1
+                return (
+                  <div className="min-h-11 border-r p-0.5 last:border-r-0" key={day.toISOString()}>
+                    {bucket.length > 0 ? (
+                      <div className="grid gap-0.5">
+                        {bucket.map((interview) => (
+                          <button
+                            className={`w-full truncate rounded px-1.5 py-1 text-left ${
+                              conflict
+                                ? 'border border-red-400 bg-red-50 dark:bg-red-950/40'
+                                : 'bg-primary/10 hover:bg-primary/20'
+                            }`}
+                            data-testid={`week-slot-${interview.id}`}
+                            key={interview.id}
+                            onClick={() => onOpen(interview.id)}
+                            title={`${interview.respondent}${
+                              interview.respondentRole ? ` — ${interview.respondentRole}` : ''
+                            }${conflict ? ' · конфликт' : ''}`}
+                            type="button"
+                          >
+                            <Typography as="span" truncate variant="controlXs">
+                              {interview.respondent}
+                            </Typography>
+                          </button>
+                        ))}
+                      </div>
+                    ) : canCreate ? (
+                      <button
+                        aria-label={`Создать интервью ${day.getDate()} в ${hour}:00`}
+                        className="h-full min-h-10 w-full rounded hover:bg-muted"
+                        onClick={() => onCreate(slotToDatetimeLocal(weekStart, { dayIndex, hour }))}
+                        type="button"
+                      />
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <Typography as="p" tone="muted" variant="caption">
+        Часы 8:00–20:00; интервью вне сетки недели не показаны. Красная рамка — два и более
+        интервью в один слот.
+      </Typography>
+    </div>
+  )
+}
+
 function InterviewDialog({
   open,
   onOpenChange,
+  initialWhen = '',
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Предзаполненное «когда» (из клика по слоту недельного календаря). */
+  initialWhen?: string
 }) {
   const { projectId } = useSurveyProject()
   const groupsQuery = useDomainGroupsQuery(projectId)
@@ -206,7 +408,7 @@ function InterviewDialog({
   const domains = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
   const guides = guidesQuery.data?.items ?? []
 
-  const [scheduledAt, setScheduledAt] = useState('')
+  const [scheduledAt, setScheduledAt] = useState(initialWhen)
   const [respondent, setRespondent] = useState('')
   const [respondentRole, setRespondentRole] = useState('')
   const [domainId, setDomainId] = useState('')
