@@ -42,6 +42,7 @@ import {
   useDomainGroupsQuery,
   useFindingsQuery,
   useInterviewsQuery,
+  useReportQuery,
   useStagesQuery,
   useTasksQuery,
   useUpdateRequestStatusMutation,
@@ -53,6 +54,7 @@ const KPI_COLORS: Record<string, ChipColor> = {
   findings: 'amber',
   requests: 'red',
   milestone: 'purple',
+  report: 'green',
 }
 
 const KPI_ICONS: Record<string, React.ReactNode> = {
@@ -61,6 +63,7 @@ const KPI_ICONS: Record<string, React.ReactNode> = {
   findings: <HugeiconsIcon icon={AlertCircleIcon} strokeWidth={2} />,
   requests: <HugeiconsIcon icon={InboxIcon} strokeWidth={2} />,
   milestone: <HugeiconsIcon icon={MilestoneIcon} strokeWidth={2} />,
+  report: <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} />,
 }
 
 /** Ролевой дашборд проекта (по прототипу): KPI, «Ждём от заказчика/вас», этапы, домены. */
@@ -74,6 +77,8 @@ export function DashboardPage() {
   const requestsQuery = useDataRequestsQuery(projectId)
   const findingsQuery = useFindingsQuery(projectId)
   const interviewsQuery = useInterviewsQuery(projectId)
+  // Сводку виз отчёта грузим только команде (РП следит за согласованием).
+  const reportQuery = useReportQuery(projectId, isTeam)
 
   const groups = useMemo(() => domainsQuery.data?.items ?? [], [domainsQuery.data])
   const coverage = useMemo(() => coverageOf(groups), [groups])
@@ -111,8 +116,19 @@ export function DashboardPage() {
         userId: user.id,
         stages,
         interviews: interviewsQuery.data?.items ?? [],
+        reportReadiness: reportQuery.data?.readiness ?? null,
       }),
-    [coverage, findingStatuses, findings, interviewsQuery.data, requests, stages, user.id, viewRole],
+    [
+      coverage,
+      findingStatuses,
+      findings,
+      interviewsQuery.data,
+      reportQuery.data,
+      requests,
+      stages,
+      user.id,
+      viewRole,
+    ],
   )
   const upcomingInterviews = useMemo(
     () => upcomingInterviewsOf(interviewsQuery.data?.items ?? []),
@@ -151,7 +167,10 @@ export function DashboardPage() {
         </Typography>
       </section>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4" data-testid="dashboard-kpis">
+      <div
+        className={`grid grid-cols-2 gap-4 ${kpis.length > 4 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}
+        data-testid="dashboard-kpis"
+      >
         {kpis.map((kpi) => (
           <KpiCard
             color={KPI_COLORS[kpi.key]}

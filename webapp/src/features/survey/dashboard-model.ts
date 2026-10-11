@@ -4,6 +4,7 @@ import type {
   FindingDto,
   FindingStatusItem,
   InterviewDto,
+  ReportReadiness,
   StageDto,
   TaskStatus,
 } from '@ordiks-survey/contracts'
@@ -103,7 +104,7 @@ export function upcomingInterviewsOf(interviews: ReadonlyArray<InterviewDto>, li
 }
 
 export type DashboardKpi = {
-  key: 'coverage' | 'interview' | 'findings' | 'requests' | 'milestone'
+  key: 'coverage' | 'interview' | 'findings' | 'requests' | 'milestone' | 'report'
   label: string
   value: string
   hint: string
@@ -119,6 +120,8 @@ export type DashboardKpiInput = {
   userId: string
   stages: ReadonlyArray<StageDto>
   interviews: ReadonlyArray<InterviewDto>
+  /** Сводка виз отчёта (readiness из GET /report); без отчёта карточка не показывается. */
+  reportReadiness?: ReportReadiness | null
 }
 
 /**
@@ -185,6 +188,25 @@ export function dashboardKpis(input: DashboardKpiInput): DashboardKpi[] {
         : 'веха не задана',
       tone:
         milestone?.endAt && (daysUntil(milestone.endAt) ?? 0) < 0 ? 'danger' : undefined,
+    },
+    ...reportApprovalCards(viewRole, input.reportReadiness ?? null),
+  ]
+}
+
+/** Карточка «Согласование отчёта: N из M разделов» — РП видит ход виз заказчика. */
+export function reportApprovalCards(
+  viewRole: SurveyViewRole,
+  readiness: ReportReadiness | null,
+): DashboardKpi[] {
+  if (viewRole !== 'team' || !readiness || readiness.sections === 0) return []
+  const waiting = readiness.sections - readiness.agreed
+  return [
+    {
+      key: 'report',
+      label: 'Согласование отчёта',
+      value: `${readiness.agreed} из ${readiness.sections}`,
+      hint: `с замечаниями: ${readiness.withIssues} · ждём виз: ${waiting}`,
+      tone: readiness.withIssues > 0 ? 'warn' : undefined,
     },
   ]
 }
