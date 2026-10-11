@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -55,6 +55,7 @@ import {
   useDeleteGuideSectionMutation,
   useDuplicateGuideMutation,
   useGuidesQuery,
+  useInterviewsQuery,
   useMoveGuideQuestionMutation,
   useMoveGuideSectionMutation,
   useUpdateGuideMutation,
@@ -138,6 +139,11 @@ function GuideCard({ guide, onEdit }: { guide: GuideDto; onEdit: () => void }) {
   const stats = guideStats(guide)
   const duplicate = useDuplicateGuideMutation(projectId)
   const remove = useDeleteGuideMutation(projectId)
+  const interviewsQuery = useInterviewsQuery(projectId)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const linkedInterviews = (interviewsQuery.data?.items ?? []).filter(
+    (interview) => interview.guideId === guide.id,
+  ).length
 
   return (
     <div
@@ -180,19 +186,30 @@ function GuideCard({ guide, onEdit }: { guide: GuideDto; onEdit: () => void }) {
         <Button
           aria-label={`Удалить гайд «${guide.name}»`}
           data-testid="guide-delete"
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(guide.id, {
-              onSuccess: () => toast.success('Гайд удалён'),
-              onError: (error) => toast.error(error.message),
-            })
-          }
+          onClick={() => setConfirmingDelete(true)}
           size="icon-sm"
           variant="ghost"
         >
           <HugeiconsIcon className="text-red-600" icon={TrashIcon} strokeWidth={2} />
         </Button>
       </div>
+      <ConfirmDeleteDialog
+        description={
+          linkedInterviews > 0
+            ? `Гайд используется в ${linkedInterviews} ${pluralRu(linkedInterviews, 'интервью', 'интервью', 'интервью')}; секции и вопросы будут удалены.`
+            : 'Секции и вопросы будут удалены безвозвратно.'
+        }
+        onConfirm={() =>
+          remove.mutate(guide.id, {
+            onSuccess: () => toast.success('Гайд удалён'),
+            onError: (error) => toast.error(error.message),
+          })
+        }
+        onOpenChange={setConfirmingDelete}
+        open={confirmingDelete}
+        pending={remove.isPending}
+        title={`Удалить гайд «${guide.name}»?`}
+      />
     </div>
   )
 }
@@ -507,6 +524,8 @@ function SectionEditor({
   const moveQuestion = useMoveGuideQuestionMutation(projectId)
   const removeQuestion = useDeleteGuideQuestionMutation(projectId)
   const [renaming, setRenaming] = useState(false)
+  const [confirmingSection, setConfirmingSection] = useState(false)
+  const [confirmingQuestion, setConfirmingQuestion] = useState<GuideQuestionDto | null>(null)
 
   const questions = section.questions
 
@@ -544,13 +563,7 @@ function SectionEditor({
         </Button>
         <Button
           aria-label={`Удалить секцию «${section.title}»`}
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(section.id, {
-              onSuccess: () => toast.success('Секция удалена'),
-              onError: (error) => toast.error(error.message),
-            })
-          }
+          onClick={() => setConfirmingSection(true)}
           size="icon-xs"
           variant="ghost"
         >
@@ -623,13 +636,7 @@ function SectionEditor({
                   </Button>
                   <Button
                     aria-label={`Удалить вопрос «${question.text}»`}
-                    disabled={removeQuestion.isPending}
-                    onClick={() =>
-                      removeQuestion.mutate(question.id, {
-                        onSuccess: () => toast.success('Вопрос удалён'),
-                        onError: (error) => toast.error(error.message),
-                      })
-                    }
+                    onClick={() => setConfirmingQuestion(question)}
                     size="icon-xs"
                     variant="ghost"
                   >
@@ -666,6 +673,35 @@ function SectionEditor({
           title="Переименовать секцию"
         />
       ) : null}
+
+      <ConfirmDeleteDialog
+        description={`Будут удалены все вопросы секции (${questions.length}).`}
+        onConfirm={() =>
+          remove.mutate(section.id, {
+            onSuccess: () => toast.success('Секция удалена'),
+            onError: (error) => toast.error(error.message),
+          })
+        }
+        onOpenChange={setConfirmingSection}
+        open={confirmingSection}
+        pending={remove.isPending}
+        title={`Удалить секцию «${section.title}»?`}
+      />
+      <ConfirmDeleteDialog
+        onConfirm={() => {
+          if (!confirmingQuestion) return
+          removeQuestion.mutate(confirmingQuestion.id, {
+            onSuccess: () => toast.success('Вопрос удалён'),
+            onError: (error) => toast.error(error.message),
+          })
+        }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingQuestion(null)
+        }}
+        open={confirmingQuestion !== null}
+        pending={removeQuestion.isPending}
+        title={confirmingQuestion ? `Удалить вопрос «${confirmingQuestion.text}»?` : ''}
+      />
     </div>
   )
 }
