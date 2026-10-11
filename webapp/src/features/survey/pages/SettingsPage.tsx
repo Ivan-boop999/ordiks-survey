@@ -7,7 +7,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ChipColor, FactType, InviteDto, MemberRole } from '@ordiks-survey/contracts'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
@@ -73,13 +73,17 @@ import { useSurveyProject } from '../use-survey-project'
 
 /** Настройки проекта (только команда ОРДИКС): участники, приглашения, справочники, данные. */
 export function SettingsPage() {
+  // Управляемый таб: кнопка «Пригласить участника» из «Участников» открывает «Приглашения».
+  const [tab, setTab] = useState('members')
+  const [inviteNoteSeed, setInviteNoteSeed] = useState<string | null>(null)
+
   return (
     <PageContainer>
       <PageHeader
         description="Состав проекта, приглашения по коду и справочники статусов. Клиентский портал эти разделы не видит."
         title="Настройки проекта"
       />
-      <Tabs defaultValue="members">
+      <Tabs onValueChange={setTab} value={tab}>
         <TabsList>
           <TabsTrigger value="members">Участники</TabsTrigger>
           <TabsTrigger value="invites">Приглашения</TabsTrigger>
@@ -87,10 +91,18 @@ export function SettingsPage() {
           <TabsTrigger value="data">Данные</TabsTrigger>
         </TabsList>
         <TabsContent value="members">
-          <MembersTab />
+          <MembersTab
+            onInvite={() => {
+              setInviteNoteSeed('Участник обследования')
+              setTab('invites')
+            }}
+          />
         </TabsContent>
         <TabsContent value="invites">
-          <InvitesTab />
+          <InvitesTab
+            noteSeed={inviteNoteSeed}
+            onNoteSeedConsumed={() => setInviteNoteSeed(null)}
+          />
         </TabsContent>
         <TabsContent value="dictionaries">
           <DictionariesTab />
@@ -107,7 +119,7 @@ export function SettingsPage() {
 // Участники
 // ============================================================
 
-function MembersTab() {
+function MembersTab({ onInvite }: { onInvite: (note: string) => void }) {
   const { projectId } = useSurveyProject()
   const membersQuery = useMembersQuery(projectId)
   const [adding, setAdding] = useState(false)
@@ -141,6 +153,7 @@ function MembersTab() {
       )}
       {adding ? (
         <AddMemberDialog
+          onInvite={() => onInvite('Участник обследования')}
           onOpenChange={(open) => {
             if (!open) setAdding(false)
           }}
@@ -214,9 +227,11 @@ function MemberRow({
 
 function AddMemberDialog({
   open,
+  onInvite,
   onOpenChange,
 }: {
   open: boolean
+  onInvite: (note: string) => void
   onOpenChange: (open: boolean) => void
 }) {
   const auth = useAuth()
@@ -227,20 +242,47 @@ function AddMemberDialog({
   const [error, setError] = useState<string | null>(null)
 
   // Поиск пользователя по email — через справочник администратора: другой публичной
-  // картинки «пользователи» у API нет, а приглашения создают аккаунт отдельно.
+  // картинки «пользователи» у API нет. Владельцу организации и РП он закрыт (403), поэтому
+  // им показываем рабочий сценарий — приглашение (аудит: «Добавить участника» не работал).
   const canLookup = auth.user?.role === 'admin'
+
+  if (!canLookup) {
+    return (
+      <Dialog onOpenChange={onOpenChange} open={open}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Добавить участника</DialogTitle>
+            <DialogDescription>
+              Добавление по email доступно только администратору системы. Для команды
+              и заказчика используйте приглашение: код создаёт аккаунт с нужной ролью
+              и сразу добавляет принявшего в этот проект.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} variant="outline">
+              Отмена
+            </Button>
+            <Button
+              data-testid="member-invite-cta"
+              onClick={() => {
+                onOpenChange(false)
+                onInvite('Участник обследования')
+              }}
+            >
+              <HugeiconsIcon icon={UserMultipleIcon} strokeWidth={2} />
+              Пригласить участника
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   const submit = async () => {
     setError(null)
     const trimmed = email.trim()
     if (!trimmed) {
       setError('Укажите email существующего пользователя.')
-      return
-    }
-    if (!canLookup) {
-      setError(
-        'Поиск по email доступен только администратору. Создайте приглашение на вкладке «Приглашения» — код сработает и для существующей почты не нужен, новый участник зарегистрируется сам.',
-      )
       return
     }
     try {
@@ -326,10 +368,26 @@ function AddMemberDialog({
 // Приглашения
 // ============================================================
 
-function InvitesTab() {
+function InvitesTab({
+  noteSeed,
+  onNoteSeedConsumed,
+}: {
+  noteSeed: string | null
+  onNoteSeedConsumed: () => void
+}) {
   const invitesQuery = useInvitesQuery()
   const [creating, setCreating] = useState(false)
+  const [initialNote, setInitialNote] = useState('')
   const invites = invitesQuery.data?.items ?? []
+
+  // Переход «Пригласить участника» из вкладки «Участники»: сразу открыть диалог
+  // создания с предзаполненным примечанием.
+  useEffect(() => {
+    if (noteSeed === null) return
+    setInitialNote(noteSeed)
+    setCreating(true)
+    onNoteSeedConsumed()
+  }, [noteSeed, onNoteSeedConsumed])
 
   return (
     <SectionCard
@@ -359,6 +417,7 @@ function InvitesTab() {
       )}
       {creating ? (
         <InviteCreateDialog
+          initialNote={initialNote}
           onOpenChange={(open) => {
             if (!open) setCreating(false)
           }}
@@ -440,9 +499,11 @@ async function copyText(text: string) {
 }
 
 function InviteCreateDialog({
+  initialNote = '',
   open,
   onOpenChange,
 }: {
+  initialNote?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -453,7 +514,7 @@ function InviteCreateDialog({
     orgRole: 'client',
     withProject: true,
     memberRole: 'client_lead',
-    note: '',
+    note: initialNote,
   })
   const [error, setError] = useState<string | null>(null)
 
@@ -616,6 +677,9 @@ function DictionariesTab() {
   const [draft, setDraft] = useState<DictionaryDraft | null>(null)
   const [statusName, setStatusNameValue] = useState('')
   const [statusColor, setStatusColorValue] = useState<ChipColor>('gray')
+  // Отдельные состояния для «нового статуса» и «нового типа факта»: общий useState
+  // зеркалил текст между двумя несвязанными полями (аудит: баг справочников).
+  const [factTypeName, setFactTypeName] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const active = useMemo(
@@ -839,20 +903,21 @@ function DictionariesTab() {
             <Field className="flex-1">
               <FieldLabel htmlFor="fact-type-new-name">Новый тип</FieldLabel>
               <Input
+                data-testid="fact-type-new-name"
                 id="fact-type-new-name"
-                onChange={(event) => setStatusNameValue(event.target.value)}
+                onChange={(event) => setFactTypeName(event.target.value)}
                 placeholder="Видео"
-                value={statusName}
+                value={factTypeName}
               />
             </Field>
             <Button
               onClick={() => {
-                const name = statusName.trim()
+                const name = factTypeName.trim()
                 if (!name) return
                 const key = factTypeKeyFor(name, active.factTypes)
                 const next: FactType = { key, name, kind: 'note', icon: 'note', color: 'gray' }
                 setDraft({ ...active, factTypes: [...active.factTypes, next] })
-                setStatusNameValue('')
+                setFactTypeName('')
               }}
               size="sm"
               variant="outline"
