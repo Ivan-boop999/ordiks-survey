@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ColorDot, SectionCard, StatusChip, UserAvatar } from '@/components/survey'
+import { ColorDot, ConfirmDeleteDialog, SectionCard, StatusChip, UserAvatar } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -169,9 +169,25 @@ function MemberRow({
 }: {
   member: { id: string; userId: string; role: MemberRole; email: string; displayName: string | null }
 }) {
+  const auth = useAuth()
   const { projectId } = useSurveyProject()
   const updateRole = useUpdateProjectMemberMutation(projectId)
   const remove = useRemoveProjectMemberMutation(projectId)
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const [confirmingDowngrade, setConfirmingDowngrade] = useState<MemberRole | null>(null)
+  const isSelf = auth.user?.id === member.userId
+
+  const applyRole = (role: MemberRole) =>
+    updateRole.mutate(
+      { memberId: member.id, role },
+      {
+        onSuccess: () => {
+          toast.success('Роль обновлена')
+          setConfirmingDowngrade(null)
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    )
 
   return (
     <div className="flex items-center gap-2.5 rounded-lg border px-3 py-2" data-testid="member-row">
@@ -179,21 +195,21 @@ function MemberRow({
       <div className="min-w-0 flex-1">
         <Typography as="p" truncate variant="bodySmMedium">
           {displayNameOf(member.displayName, member.email)}
+          {isSelf ? ' (вы)' : ''}
         </Typography>
         <Typography as="p" tone="muted" truncate variant="caption">
           {member.email}
         </Typography>
       </div>
       <Select
-        onValueChange={(role) =>
-          updateRole.mutate(
-            { memberId: member.id, role: role as MemberRole },
-            {
-              onSuccess: () => toast.success('Роль обновлена'),
-              onError: (error) => toast.error(error.message),
-            },
-          )
-        }
+        onValueChange={(role) => {
+          // Понижение прав — с подтверждением, повышение и равная роль — сразу.
+          if (MEMBER_ROLE_RANK[role as MemberRole] > MEMBER_ROLE_RANK[member.role]) {
+            setConfirmingDowngrade(role as MemberRole)
+            return
+          }
+          applyRole(role as MemberRole)
+        }}
         value={member.role}
       >
         <SelectTrigger aria-label={`Роль ${member.email}`} className="w-[210px]">
@@ -207,22 +223,61 @@ function MemberRow({
           ))}
         </SelectContent>
       </Select>
-      <Button
-        aria-label={`Удалить участника ${member.email}`}
-        disabled={remove.isPending}
-        onClick={() =>
+      {isSelf ? (
+        <span className="w-9" />
+      ) : (
+        <Button
+          aria-label={`Удалить участника ${member.email}`}
+          onClick={() => setConfirmingRemove(true)}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <HugeiconsIcon className="text-red-600" icon={TrashIcon} strokeWidth={2} />
+        </Button>
+      )}
+      <ConfirmDeleteDialog
+        confirmLabel="Исключить"
+        description="Доступ к проекту будет отозван."
+        onConfirm={() =>
           remove.mutate(member.id, {
-            onSuccess: () => toast.success('Участник удалён'),
+            onSuccess: () => {
+              toast.success('Участник удалён')
+              setConfirmingRemove(false)
+            },
             onError: (error) => toast.error(error.message),
           })
         }
-        size="icon-sm"
-        variant="ghost"
-      >
-        <HugeiconsIcon className="text-red-600" icon={TrashIcon} strokeWidth={2} />
-      </Button>
+        onOpenChange={setConfirmingRemove}
+        open={confirmingRemove}
+        pending={remove.isPending}
+        title={`Исключить ${displayNameOf(member.displayName, member.email)} из проекта?`}
+      />
+      <ConfirmDeleteDialog
+        confirmLabel="Понизить роль"
+        destructive={false}
+        description={`Роль сменится с «${MEMBER_ROLE_LABELS[member.role]}» на «${
+          confirmingDowngrade ? MEMBER_ROLE_LABELS[confirmingDowngrade] : ''
+        }».`}
+        onConfirm={() => {
+          if (confirmingDowngrade) applyRole(confirmingDowngrade)
+        }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingDowngrade(null)
+        }}
+        open={confirmingDowngrade !== null}
+        title="Понизить права участника?"
+      />
     </div>
   )
+}
+
+/** Ранг роли для распознавания понижения прав (меньше — шире права). */
+const MEMBER_ROLE_RANK: Record<MemberRole, number> = {
+  manager: 0,
+  analyst: 1,
+  client_lead: 2,
+  client_staff: 3,
+  observer: 4,
 }
 
 function AddMemberDialog({
