@@ -1,21 +1,23 @@
 import {
   ArrowRight01Icon,
+  Cancel01Icon,
   File01Icon,
   Image01Icon,
   Link02Icon,
   NoteIcon,
+  PencilIcon,
   PlusIcon,
   TrashIcon,
   Upload04Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { FactDto } from '@ordiks-survey/contracts'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, StatusChip, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,16 +38,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { useAuth } from '@/features/auth'
 import { CommentThread } from '../components/CommentThread'
-import { formatDateRu } from '../model'
+import { formatDateRu, toDateInputValue } from '../model'
 import { useSurveyProject } from '../use-survey-project'
-import { factFileDownloadUrl } from '../api'
 import {
   useCreateFactMutation,
   useDeleteFactMutation,
   useDomainGroupsQuery,
+  useFactFileUrlQuery,
   useFactsQuery,
+  useUpdateFactMutation,
   useUploadFactFileMutation,
 } from '../queries'
 
@@ -54,8 +56,8 @@ export function FactsPage() {
   const { projectId, canEdit, detail } = useSurveyProject()
   const factsQuery = useFactsQuery(projectId)
   const groupsQuery = useDomainGroupsQuery(projectId)
-  const [domainFilter, setDomainFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
+  const [domainFilter, setDomainFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
   const [creating, setCreating] = useState(false)
   const [viewing, setViewing] = useState<FactDto | null>(null)
   const [zoom, setZoom] = useState<string | null>(null)
@@ -67,11 +69,12 @@ export function FactsPage() {
     () =>
       (items ?? []).filter(
         (fact) =>
-          (!domainFilter || fact.domainId === domainFilter) &&
-          (!typeFilter || fact.typeKey === typeFilter),
+          (domainFilter === 'all' || fact.domainId === domainFilter) &&
+          (typeFilter === 'all' || fact.typeKey === typeFilter),
       ),
     [items, domainFilter, typeFilter],
   )
+  const hasActiveFilter = domainFilter !== 'all' || typeFilter !== 'all'
 
   return (
     <PageContainer>
@@ -88,12 +91,13 @@ export function FactsPage() {
         title="Факты"
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Select onValueChange={setDomainFilter} value={domainFilter || undefined}>
-          <SelectTrigger className="w-[220px]">
+      <div className="flex flex-wrap items-center gap-2" data-testid="fact-filters">
+        <Select onValueChange={setDomainFilter} value={domainFilter}>
+          <SelectTrigger aria-label="Фильтр по домену" className="w-[220px]">
             <SelectValue placeholder="Все домены" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">Все домены</SelectItem>
             {domains.map((domain) => (
               <SelectItem key={domain.id} value={domain.id}>
                 {domain.name}
@@ -101,11 +105,12 @@ export function FactsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select onValueChange={setTypeFilter} value={typeFilter || undefined}>
-          <SelectTrigger className="w-[200px]">
+        <Select onValueChange={setTypeFilter} value={typeFilter}>
+          <SelectTrigger aria-label="Фильтр по типу" className="w-[200px]">
             <SelectValue placeholder="Все типы" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">Все типы</SelectItem>
             {factTypes.map((type) => (
               <SelectItem key={type.key} value={type.key}>
                 {type.name}
@@ -113,6 +118,19 @@ export function FactsPage() {
             ))}
           </SelectContent>
         </Select>
+        {hasActiveFilter ? (
+          <Button
+            aria-label="Сбросить фильтры"
+            onClick={() => {
+              setDomainFilter('all')
+              setTypeFilter('all')
+            }}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+          </Button>
+        ) : null}
       </div>
 
       {factsQuery.isPending ? (
@@ -224,23 +242,9 @@ function FactKindChip({ fact }: { fact: FactDto }) {
 }
 
 function FactPhoto({ factId, title }: { factId: string; title: string }) {
-  const auth = useAuth()
-  const [url, setUrl] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => {
-    let alive = true
-    factFileDownloadUrl(auth.transport, factId)
-      .then((result) => {
-        if (alive) setUrl(result.url)
-      })
-      .catch(() => {
-        if (alive) setFailed(true)
-      })
-    return () => {
-      alive = false
-    }
-  }, [auth.transport, factId])
-  if (failed || !url) {
+  const urlQuery = useFactFileUrlQuery(factId, 'pending')
+  const url = urlQuery.data?.url ?? null
+  if (urlQuery.isError || !url) {
     return (
       <div className="flex h-32 items-center justify-center bg-muted/40 text-muted-foreground">
         <HugeiconsIcon icon={Image01Icon} size={36} strokeWidth={1.5} />
@@ -261,19 +265,14 @@ function FactViewDialog({
   fact: FactDto
   onZoom: (url: string) => void
 }) {
-  const auth = useAuth()
   const { canEdit } = useSurveyProject()
   const uploadFile = useUploadFactFileMutation(fact.projectId)
   const deleteFact = useDeleteFactMutation(fact.projectId)
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [editing, setEditing] = useState(false)
   const fileInput = useRef<HTMLInputElement | null>(null)
-  useEffect(() => {
-    if (fact.objectKey) {
-      factFileDownloadUrl(auth.transport, fact.id)
-        .then((result) => setPhotoUrl(result.url))
-        .catch(() => setPhotoUrl(null))
-    }
-  }, [auth.transport, fact.id, fact.objectKey])
+  const urlQuery = useFactFileUrlQuery(fact.id, fact.objectKey)
+  const photoUrl = urlQuery.data?.url ?? null
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -344,16 +343,12 @@ function FactViewDialog({
                 </Button>
               </>
             ) : null}
+            <Button onClick={() => setEditing(true)} variant="outline">
+              <HugeiconsIcon icon={PencilIcon} strokeWidth={2} />
+              Править
+            </Button>
             <Button
-              onClick={() =>
-                deleteFact.mutate(fact.id, {
-                  onSuccess: () => {
-                    toast.success('Факт удалён')
-                    onOpenChange(false)
-                  },
-                  onError: (error: Error) => toast.error(error.message),
-                })
-              }
+              onClick={() => setConfirmingDelete(true)}
               variant="ghost"
             >
               <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
@@ -361,6 +356,185 @@ function FactViewDialog({
             </Button>
           </DialogFooter>
         ) : null}
+        <ConfirmDeleteDialog
+          description="Связи с находками будут потеряны."
+          onConfirm={() =>
+            deleteFact.mutate(fact.id, {
+              onSuccess: () => {
+                toast.success('Факт удалён')
+                onOpenChange(false)
+              },
+              onError: (error: Error) => toast.error(error.message),
+            })
+          }
+          onOpenChange={setConfirmingDelete}
+          open={confirmingDelete}
+          pending={deleteFact.isPending}
+          title={`Удалить факт «${fact.title}»?`}
+        />
+        {editing ? (
+          <FactEditDialog
+            fact={fact}
+            onDone={() => setEditing(false)}
+            onOpenChange={(openValue) => {
+              if (!openValue) setEditing(false)
+            }}
+            open
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Правка метаданных факта (мутация обновления давно была в queries, UI отсутствовал). */
+function FactEditDialog({
+  open,
+  onOpenChange,
+  fact,
+  onDone,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  fact: FactDto
+  onDone: () => void
+}) {
+  const { projectId, detail } = useSurveyProject()
+  const groupsQuery = useDomainGroupsQuery(projectId)
+  const updateFact = useUpdateFactMutation(projectId)
+  const domains = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
+  const factTypes = detail?.settings.factTypes ?? []
+  const shops = detail?.shops ?? []
+
+  const [title, setTitle] = useState(fact.title)
+  const [description, setDescription] = useState(fact.description)
+  const [typeKey, setTypeKey] = useState(fact.typeKey)
+  const [domainId, setDomainId] = useState(fact.domainId ?? '')
+  const [shop, setShop] = useState(fact.shop)
+  const [factDate, setFactDate] = useState(toDateInputValue(fact.factDate))
+
+  const submit = () => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    updateFact.mutate(
+      {
+        factId: fact.id,
+        kind: fact.kind,
+        title: trimmed,
+        description: description.trim(),
+        typeKey,
+        domainId: domainId || null,
+        shop: shop.trim(),
+        factDate: factDate ? new Date(`${factDate}T00:00:00`) : undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Факт обновлён')
+          onOpenChange(false)
+          onDone()
+        },
+        onError: (error: Error) => toast.error(error.message),
+      },
+    )
+  }
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Править факт</DialogTitle>
+          <DialogDescription>Название, описание и привязки. Файл меняется отдельно.</DialogDescription>
+        </DialogHeader>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="fact-edit-title">Название</FieldLabel>
+            <Input
+              id="fact-edit-title"
+              onChange={(event) => setTitle(event.target.value)}
+              value={title}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="fact-edit-description">Описание</FieldLabel>
+            <Textarea
+              id="fact-edit-description"
+              onChange={(event) => setDescription(event.target.value)}
+              rows={2}
+              value={description}
+            />
+          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>Тип</FieldLabel>
+              <Select onValueChange={setTypeKey} value={typeKey}>
+                <SelectTrigger aria-label="Тип факта" className="w-full">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  {factTypes.map((type) => (
+                    <SelectItem key={type.key} value={type.key}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel>Домен</FieldLabel>
+              <Select onValueChange={setDomainId} value={domainId}>
+                <SelectTrigger aria-label="Домен факта" className="w-full">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Без домена</SelectItem>
+                  {domains.map((domain) => (
+                    <SelectItem key={domain.id} value={domain.id}>
+                      {domain.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>Цех</FieldLabel>
+              <Select onValueChange={setShop} value={shop}>
+                <SelectTrigger aria-label="Цех факта" className="w-full">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  {shops.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fact-edit-date">Дата</FieldLabel>
+              <Input
+                id="fact-edit-date"
+                onChange={(event) => setFactDate(event.target.value)}
+                type="date"
+                value={factDate}
+              />
+            </Field>
+          </div>
+        </FieldGroup>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} variant="outline">
+            Отмена
+          </Button>
+          <Button
+            data-testid="fact-edit-save"
+            disabled={updateFact.isPending || !title.trim()}
+            onClick={submit}
+          >
+            {updateFact.isPending ? 'Сохраняем…' : 'Сохранить'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

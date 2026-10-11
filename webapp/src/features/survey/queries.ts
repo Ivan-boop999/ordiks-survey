@@ -174,6 +174,7 @@ import {
   deleteDomainGroup,
   deleteStage,
   deleteTask,
+  factFileDownloadUrl,
   getProject,
   getProjectReport,
   listDomainGroups,
@@ -756,6 +757,22 @@ export function useDeleteFactMutation(projectId: string) {
     mutationFn: (factId: string) => deleteFact(auth.transport, factId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: surveyQueryKeys.project(projectId) }),
+  })
+}
+
+/**
+ * Подписанный URL файла факта через react-query: URL живёт ~1 ч, поэтому кэшируем на
+ * 45 минут — ре-рендеры сетки и повторные открытия карточек больше не ходят сетью
+ * (аудит: 50 фактов = 50 запросов подписи на каждый рендер).
+ */
+export function useFactFileUrlQuery(factId: string, objectKey: string | null) {
+  const auth = useAuth()
+  return useQuery({
+    queryKey: ['fact-file-url', factId, objectKey],
+    queryFn: () => factFileDownloadUrl(auth.transport, factId),
+    enabled: factId.length > 0 && objectKey !== null,
+    staleTime: 45 * 60_000,
+    gcTime: 60 * 60_000,
   })
 }
 
