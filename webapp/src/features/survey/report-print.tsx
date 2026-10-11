@@ -42,6 +42,10 @@ export const REPORT_PRINT_CSS = `
   }
   .report-print-page:last-child { break-after: auto; page-break-after: auto; }
   .report-print-hidden { display: none !important; }
+  /* Реестры (риски, свои реестры): печатные таблицы с рамками как в отчёте. */
+  .report-print-root table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  .report-print-root th, .report-print-root td { border: 1px solid #d4d4d8; padding: 4px 8px; text-align: left; vertical-align: top; }
+  .report-print-root th { background: #f4f4f5; font-weight: 600; }
 }
 `
 

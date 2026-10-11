@@ -2,6 +2,7 @@ import {
   ArrowRight01Icon,
   PencilIcon,
   PlusIcon,
+  PrinterIcon,
   TrashIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -34,7 +35,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { chipColorClass } from '@/components/survey/chip-colors'
-import { GAP_KIND_META, GAP_STATUS_META, MOSCOW_META, RISK_STATUS_META, riskCriticalityColor } from '../model'
+import {
+  formatDateRu,
+  GAP_KIND_META,
+  GAP_STATUS_META,
+  MOSCOW_META,
+  RISK_STATUS_META,
+  riskCriticalityColor,
+} from '../model'
+import { REPORT_PRINT_CSS } from '../report-print'
+import {
+  BaselinesTab,
+  CommunicationsTab,
+  DecisionsTab,
+  QuickWinsTab,
+} from './AnalyticsRegistries'
 import {
   useCreateGapMutation,
   useCreateRequirementMutation,
@@ -53,16 +68,17 @@ import {
 } from '../queries'
 import { useSurveyProject } from '../use-survey-project'
 
-/** Аналитика обследования: риски (heat), GAP-реестр и требования MoSCoW. */
+/** Аналитика обследования: риски (heat), GAP-реестр, требования MoSCoW, решения, коммуникации, quick wins и базлайны. */
 export function AnalyticsPage() {
   return (
     <PageContainer>
+      <style>{REPORT_PRINT_CSS}</style>
       <PageHeader
-        description="Что вынесло обследование: реестр рисков, разрывы между требованием и реальностью, требования к целевой системе."
+        description="Что вынесло обследование: риски, разрывы, требования, решения и метрики «как есть»."
         title="Аналитика"
       />
       <Tabs defaultValue="risks">
-        <TabsList>
+        <TabsList className="report-print-hidden">
           <TabsTrigger data-testid="analytics-tab-risks" value="risks">
             Риски
           </TabsTrigger>
@@ -71,6 +87,18 @@ export function AnalyticsPage() {
           </TabsTrigger>
           <TabsTrigger data-testid="analytics-tab-requirements" value="requirements">
             Требования
+          </TabsTrigger>
+          <TabsTrigger data-testid="analytics-tab-decisions" value="decisions">
+            Решения
+          </TabsTrigger>
+          <TabsTrigger data-testid="analytics-tab-communications" value="communications">
+            Коммуникации
+          </TabsTrigger>
+          <TabsTrigger data-testid="analytics-tab-quick-wins" value="quick-wins">
+            Quick Wins
+          </TabsTrigger>
+          <TabsTrigger data-testid="analytics-tab-baselines" value="baselines">
+            Базлайны
           </TabsTrigger>
         </TabsList>
         <TabsContent value="risks">
@@ -82,6 +110,18 @@ export function AnalyticsPage() {
         <TabsContent value="requirements">
           <RequirementsTab />
         </TabsContent>
+        <TabsContent value="decisions">
+          <DecisionsTab />
+        </TabsContent>
+        <TabsContent value="communications">
+          <CommunicationsTab />
+        </TabsContent>
+        <TabsContent value="quick-wins">
+          <QuickWinsTab />
+        </TabsContent>
+        <TabsContent value="baselines">
+          <BaselinesTab />
+        </TabsContent>
       </Tabs>
     </PageContainer>
   )
@@ -90,7 +130,8 @@ export function AnalyticsPage() {
 type DomainOption = { id: string; name: string }
 type FindingOption = { id: string; title: string }
 
-function useAnalyticsOptions() {
+/** Домены и находки для селектов вкладок аналитики (общие для основной и второй волны). */
+export function useAnalyticsOptions() {
   const { projectId } = useSurveyProject()
   const groupsQuery = useDomainGroupsQuery(projectId)
   const findingsQuery = useFindingsQuery(projectId)
@@ -99,7 +140,7 @@ function useAnalyticsOptions() {
   return { domains, findings }
 }
 
-function domainName(domains: readonly DomainOption[], domainId: string | null): string {
+export function domainName(domains: readonly DomainOption[], domainId: string | null): string {
   return domains.find((domain) => domain.id === domainId)?.name ?? '—'
 }
 
@@ -110,7 +151,7 @@ function domainName(domains: readonly DomainOption[], domainId: string | null): 
 const PROBABILITY_IMPACT_SCALE = [1, 2, 3, 4, 5] as const
 
 function RisksTab() {
-  const { projectId, canEdit } = useSurveyProject()
+  const { projectId, canEdit, detail } = useSurveyProject()
   const risksQuery = useRisksQuery(projectId)
   const [editing, setEditing] = useState<RiskDto | 'new' | null>(null)
   const { domains } = useAnalyticsOptions()
@@ -123,34 +164,47 @@ function RisksTab() {
 
   return (
     <div className="grid gap-4">
-      {canEdit ? (
-        <div>
+      <div className="flex flex-wrap items-center gap-2 report-print-hidden">
+        {canEdit ? (
           <Button data-testid="risk-create-open" onClick={() => setEditing('new')}>
             <HugeiconsIcon icon={PlusIcon} strokeWidth={2} />
             Риск
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+        <Button data-testid="risks-print-button" onClick={() => window.print()} variant="outline">
+          <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
+          Печать
+        </Button>
+      </div>
 
-      {risksQuery.isPending ? (
-        <Typography as="p" tone="muted" variant="bodySm">
-          Загружаем риски…
-        </Typography>
-      ) : sorted.length === 0 ? (
-        <SurveyEmptyState
-          action={
-            canEdit ? (
-              <Button onClick={() => setEditing('new')} variant="outline">
-                <HugeiconsIcon icon={PlusIcon} strokeWidth={2} />
-                Первый риск
-              </Button>
-            ) : undefined
-          }
-          description="Риск = вероятность × влияние. Критичные попадают в отчёт и дорожную карту."
-          title="Рисков нет"
-        />
-      ) : (
-        <Table>
+      <div className="report-print-root" data-testid="risks-print-root">
+        <div className="mb-3 hidden print:block">
+          <Typography as="h2" variant="h3">
+            Реестр рисков
+          </Typography>
+          <Typography as="p" tone="muted" variant="caption">
+            {detail?.name ?? ''} · {formatDateRu(new Date())}
+          </Typography>
+        </div>
+        {risksQuery.isPending ? (
+          <Typography as="p" tone="muted" variant="bodySm">
+            Загружаем риски…
+          </Typography>
+        ) : sorted.length === 0 ? (
+          <SurveyEmptyState
+            action={
+              canEdit ? (
+                <Button onClick={() => setEditing('new')} variant="outline">
+                  <HugeiconsIcon icon={PlusIcon} strokeWidth={2} />
+                  Первый риск
+                </Button>
+              ) : undefined
+            }
+            description="Риск = вероятность × влияние. Критичные попадают в отчёт и дорожную карту."
+            title="Рисков нет"
+          />
+        ) : (
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Риск</TableHead>
@@ -160,7 +214,7 @@ function RisksTab() {
               <TableHead className="text-center">Критичность</TableHead>
               <TableHead>Митигация</TableHead>
               <TableHead>Статус</TableHead>
-              {canEdit ? <TableHead className="w-0" /> : null}
+              {canEdit ? <TableHead className="w-0 report-print-hidden" /> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -206,7 +260,7 @@ function RisksTab() {
                   </StatusChip>
                 </TableCell>
                 {canEdit ? (
-                  <TableCell>
+                  <TableCell className="report-print-hidden">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         aria-label={`Редактировать «${risk.title}»`}
@@ -224,7 +278,8 @@ function RisksTab() {
             ))}
           </TableBody>
         </Table>
-      )}
+        )}
+      </div>
 
       {canEdit && editing ? (
         <RiskDialog
