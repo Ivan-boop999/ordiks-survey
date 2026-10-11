@@ -80,7 +80,7 @@ export function InvitePage() {
         <form
           className="grid gap-5 rounded-xl border bg-card p-6 shadow-sm"
           data-testid="invite-form"
-          onSubmit={(event: React.ChangeEvent<HTMLInputElement>) => void submit(event)}
+          onSubmit={(event: React.FormEvent<HTMLFormElement>) => void submit(event)}
         >
           <div className="grid gap-1 text-center">
             <Typography as="h1" variant="h3">
