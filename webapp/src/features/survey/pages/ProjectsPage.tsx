@@ -1,12 +1,12 @@
 import { PlusIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import type { ProjectSummary } from '@ordiks-survey/contracts'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
-import { ProgressBar, StatusChip, SurveyEmptyState } from '@/components/survey'
+import { ConfirmDeleteDialog, ProgressBar, StatusChip, SurveyEmptyState } from '@/components/survey'
 import { Typography } from '@/components/typography'
 import { Button } from '@/components/ui/button'
 import {
@@ -103,6 +103,7 @@ export function ProjectsPage() {
 function ProjectCard({ isTeam, project }: { isTeam: boolean; project: ProjectSummary }) {
   const coverage = useProjectCoverage(project.id)
   const archive = useArchiveProjectMutation()
+  const [confirmingArchive, setConfirmingArchive] = useState(false)
   const statusMeta = PROJECT_STATUS_META[project.status]
 
   return (
@@ -136,13 +137,7 @@ function ProjectCard({ isTeam, project }: { isTeam: boolean; project: ProjectSum
         <div className="flex justify-end gap-2">
           {project.status === 'active' ? (
             <Button
-              disabled={archive.isPending}
-              onClick={() =>
-                archive.mutate(
-                  { projectId: project.id, status: 'archived' },
-                  { onSuccess: () => toast.success('Проект в архиве') },
-                )
-              }
+              onClick={() => setConfirmingArchive(true)}
               size="sm"
               variant="ghost"
             >
@@ -165,6 +160,26 @@ function ProjectCard({ isTeam, project }: { isTeam: boolean; project: ProjectSum
           )}
         </div>
       ) : null}
+      <ConfirmDeleteDialog
+        confirmLabel="В архив"
+        destructive={false}
+        description="Проект скроется из списка активных; восстановить можно будет в любой момент."
+        onConfirm={() =>
+          archive.mutate(
+            { projectId: project.id, status: 'archived' },
+            {
+              onSuccess: () => {
+                toast.success('Проект в архиве')
+                setConfirmingArchive(false)
+              },
+            },
+          )
+        }
+        onOpenChange={setConfirmingArchive}
+        open={confirmingArchive}
+        pending={archive.isPending}
+        title={`Переместить проект «${project.name}» в архив?`}
+      />
     </div>
   )
 }
@@ -179,6 +194,7 @@ function CreateProjectDialog({
   const create = useCreateProjectMutation()
   const createFromTemplate = useCreateProjectFromTemplateMutation()
   const templatesQuery = useProjectTemplatesQuery()
+  const navigate = useNavigate()
   const templates = templatesQuery.data?.items ?? []
   const [name, setName] = useState('')
   const [client, setClient] = useState('')
@@ -201,7 +217,9 @@ function CreateProjectDialog({
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
     const options = {
-      onSuccess: () => {
+      // Автопереход в созданный проект: раньше пользователь оставался в списке
+      // и не понимал, что произошло (аудит).
+      onSuccess: (project: { id: string }) => {
         toast.success('Проект создан')
         onOpenChange(false)
         setName('')
@@ -209,6 +227,7 @@ function CreateProjectDialog({
         setCity('')
         setShops('')
         setTemplateId('blank')
+        void navigate({ to: sectionPath(project.id, 'dashboard') })
       },
       onError: (mutationError: Error) => {
         setError(mutationError.message || 'Не удалось создать проект')
