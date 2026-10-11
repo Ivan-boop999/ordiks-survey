@@ -6,6 +6,7 @@ import {
   TrashIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { useLocation, useRouter } from '@tanstack/react-router'
 import type { GapDto, RequirementDto, RiskDto } from '@ordiks-survey/contracts'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -67,8 +68,27 @@ import {
 } from '../queries'
 import { useSurveyProject } from '../use-survey-project'
 
+const ANALYTICS_TABS = [
+  'risks',
+  'gaps',
+  'requirements',
+  'decisions',
+  'communications',
+  'quick-wins',
+  'baselines',
+] as const
+type AnalyticsTab = (typeof ANALYTICS_TABS)[number]
+
 /** Аналитика обследования: риски (heat), GAP-реестр, требования MoSCoW, решения, коммуникации, quick wins и базлайны. */
 export function AnalyticsPage() {
+  const location = useLocation()
+  const router = useRouter()
+  // Активная вкладка живёт в ?tab= — F5 не сбрасывает её, реестр можно отправить ссылкой.
+  const tab = useMemo<AnalyticsTab>(() => {
+    const raw = new URLSearchParams(location.searchStr).get('tab') ?? ''
+    return (ANALYTICS_TABS as readonly string[]).includes(raw) ? (raw as AnalyticsTab) : 'risks'
+  }, [location.searchStr])
+
   return (
     <PageContainer>
       <style>{REPORT_PRINT_CSS}</style>
@@ -76,27 +96,30 @@ export function AnalyticsPage() {
         description="Что вынесло обследование: риски, разрывы, требования, решения и метрики «как есть»."
         title="Аналитика"
       />
-      <Tabs defaultValue="risks">
-        <TabsList className="report-print-hidden">
-          <TabsTrigger data-testid="analytics-tab-risks" value="risks">
+      <Tabs
+        onValueChange={(value) => router.history.replace(`${location.pathname}?tab=${value}`)}
+        value={tab}
+      >
+        <TabsList className="report-print-hidden max-w-full overflow-x-auto">
+          <TabsTrigger className="shrink-0 whitespace-nowrap" data-testid="analytics-tab-risks" value="risks">
             Риски
           </TabsTrigger>
-          <TabsTrigger data-testid="analytics-tab-gaps" value="gaps">
+          <TabsTrigger className="shrink-0 whitespace-nowrap" data-testid="analytics-tab-gaps" value="gaps">
             GAP
           </TabsTrigger>
-          <TabsTrigger data-testid="analytics-tab-requirements" value="requirements">
+          <TabsTrigger className="shrink-0 whitespace-nowrap" data-testid="analytics-tab-requirements" value="requirements">
             Требования
           </TabsTrigger>
-          <TabsTrigger data-testid="analytics-tab-decisions" value="decisions">
+          <TabsTrigger className="shrink-0 whitespace-nowrap" data-testid="analytics-tab-decisions" value="decisions">
             Решения
           </TabsTrigger>
-          <TabsTrigger data-testid="analytics-tab-communications" value="communications">
+          <TabsTrigger className="shrink-0 whitespace-nowrap" data-testid="analytics-tab-communications" value="communications">
             Коммуникации
           </TabsTrigger>
-          <TabsTrigger data-testid="analytics-tab-quick-wins" value="quick-wins">
+          <TabsTrigger className="shrink-0 whitespace-nowrap" data-testid="analytics-tab-quick-wins" value="quick-wins">
             Quick Wins
           </TabsTrigger>
-          <TabsTrigger data-testid="analytics-tab-baselines" value="baselines">
+          <TabsTrigger className="shrink-0 whitespace-nowrap" data-testid="analytics-tab-baselines" value="baselines">
             Базлайны
           </TabsTrigger>
         </TabsList>
