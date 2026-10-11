@@ -131,8 +131,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   )
 
   const logout = useCallback(async () => {
-    await logoutAsync()
-  }, [logoutAsync])
+    // Порядок важен (аудит: logout «вешал» вкладку, стоя в очереди за зависшим refresh).
+    // Сетевой logout уходит первым, но не блокирует UI; локальная очистка выполняется сразу:
+    // отменяем запросы → сбрасываем токен → чистим кэш (заодно останавливается поллинг
+    // уведомлений) → оболочка видит user === null и уходит на /login. Сеть договаривает фоном.
+    const networkLogout = logoutAsync().catch(() => undefined)
+    await queryClient.cancelQueries()
+    setAccessToken(null)
+    queryClient.clear()
+    await networkLogout
+  }, [logoutAsync, queryClient, setAccessToken])
 
   const requestPasswordReset = useCallback(
     async (input: PasswordResetRequest) => {

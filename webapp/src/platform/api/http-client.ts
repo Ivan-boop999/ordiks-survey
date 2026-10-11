@@ -3,6 +3,20 @@ import type { z } from 'zod'
 
 const defaultApiBaseUrl = (import.meta.env?.VITE_API_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
+/**
+ * Дефолтный таймаут любого API-запроса: зависший fetch больше не блокирует интерфейс
+ * бесконечно (мутации авторизации имеют свой, более короткий таймаут в auth/api.ts).
+ */
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+
+function withDefaultTimeout(signal: AbortSignal | undefined): AbortSignal | undefined {
+  const timeout = AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS)
+  if (!signal) return timeout
+  // AbortSignal.any есть во всех актуальных браузерах; на старых — только abort вызывающего.
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([signal, timeout])
+  return signal
+}
+
 export type HttpRequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
@@ -57,7 +71,7 @@ export class HttpClient {
       method: options.method ?? 'GET',
       credentials: options.credentials ?? 'include',
       headers,
-      signal: options.signal,
+      signal: withDefaultTimeout(options.signal),
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     })
 

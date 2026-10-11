@@ -3,7 +3,7 @@ export type BrowserAuthCoordinator = <T>(mutation: () => Promise<T>) => Promise<
 type BrowserLockManager = {
   request: <T>(
     name: string,
-    options: { mode: 'exclusive' },
+    options: { mode: 'exclusive'; ifAvailable?: boolean },
     mutation: () => Promise<T>,
   ) => Promise<T>
 }
@@ -37,6 +37,26 @@ export function createBrowserAuthCoordinator(
 }
 
 export const coordinateBrowserAuthMutation = createBrowserAuthCoordinator()
+
+/**
+ * Logout never queues behind a possibly-stuck refresh: with Web Locks it grabs the lock with
+ * `ifAvailable` and runs anyway when the lock is busy, and in the fallback queue it skips the
+ * `inProcessTail` entirely. The server treats logout as idempotent and fences late refreshes,
+ * so running unlocked is safe — while queueing made the tab hang forever (audit: logout bug).
+ */
+export function createBrowserLogoutCoordinator(
+  getLockManager: () => BrowserLockManager | undefined = currentBrowserLockManager,
+): BrowserAuthCoordinator {
+  return async <T>(mutation: () => Promise<T>) => {
+    const locks = getLockManager()
+    if (locks) {
+      return locks.request(browserAuthLockName, { mode: 'exclusive', ifAvailable: true }, mutation)
+    }
+    return mutation()
+  }
+}
+
+export const coordinateBrowserLogout = createBrowserLogoutCoordinator()
 
 function currentBrowserLockManager() {
   if (typeof navigator === 'undefined') return undefined

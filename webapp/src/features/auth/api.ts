@@ -22,6 +22,7 @@ import type { z } from 'zod'
 import { ApiRequestError, HttpClient, type HttpRequestOptions } from '@/platform/api'
 import {
   coordinateBrowserAuthMutation,
+  coordinateBrowserLogout,
   type BrowserAuthCoordinator,
 } from './browser-auth-coordinator'
 import {
@@ -40,14 +41,27 @@ type AuthApiOptions = {
   setAccessToken: (accessToken: string | null) => void
   onAuthExpired?: () => void | Promise<void>
   authCoordinator?: BrowserAuthCoordinator
+  logoutCoordinator?: BrowserAuthCoordinator
 }
 
 class BrowserSessionEpochChangedError extends Error {}
+
+/**
+ * Свой таймаут мутаций авторизации: refresh/logout больше не висят вечно и не держат
+ * Web Lock (аудит: «вечный logout»). Отдельный сигнал — дедупликация refresh по abort
+ * вызывающего не затрагивается.
+ */
+const AUTH_MUTATION_TIMEOUT_MS = 10_000
+
+function authMutationSignal(): AbortSignal {
+  return AbortSignal.timeout(AUTH_MUTATION_TIMEOUT_MS)
+}
 
 export class AuthApi {
   private readonly options: AuthApiOptions
   private readonly http: HttpClient
   private readonly authCoordinator: BrowserAuthCoordinator
+  private readonly logoutCoordinator: BrowserAuthCoordinator
   private readonly sessionEpoch: string
   private refreshInFlight: {
     epoch: string
@@ -58,6 +72,7 @@ export class AuthApi {
     this.options = options
     this.http = http
     this.authCoordinator = options.authCoordinator ?? coordinateBrowserAuthMutation
+    this.logoutCoordinator = options.logoutCoordinator ?? coordinateBrowserLogout
     this.sessionEpoch = currentBrowserSessionEpoch()
   }
 
@@ -122,10 +137,13 @@ export class AuthApi {
       const payload = cookieRefreshRequestSchema.parse({})
       try {
         // Every caller that hit a 401 waits on this one refresh, so it deliberately runs without
-        // any caller's abort signal: one cancelled query must not fail the others' retry.
+        // any caller's abort signal: one cancelled query must not fail the others' retry. The
+        // dedicated timeout signal below still bounds the wait, so a dead connection cannot
+        // hold the auth lock (and thereby logout) hostage forever.
         return await this.http.request('/api/auth/refresh', cookieRefreshResponseSchema, {
           method: 'POST',
           body: payload,
+          signal: authMutationSignal(),
         })
       } catch (error) {
         if (error instanceof ApiRequestError && error.status === 401) {
@@ -147,13 +165,15 @@ export class AuthApi {
   }
 
   logout(): Promise<BrowserSessionTransition<undefined> | null> {
-    return this.authCoordinator(async () => {
+    // Logout coordinator (ifAvailable lock, no queue tail): never waits behind a stuck refresh.
+    return this.logoutCoordinator(async () => {
       if (!this.isSessionEpochCurrent(this.sessionEpoch)) return null
 
       const payload = cookieLogoutRequestSchema.parse({})
       await this.http.raw('/api/auth/logout', {
         method: 'POST',
         body: payload,
+        signal: authMutationSignal(),
       })
       const sessionEvent = publishBrowserSessionState('cleared')
       this.options.setAccessToken(null)
