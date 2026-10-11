@@ -57,7 +57,7 @@ import {
   useUpdateQuickWinMutation,
 } from '../queries'
 import { useSurveyProject } from '../use-survey-project'
-import { domainName, useAnalyticsOptions } from './AnalyticsPage'
+import { domainName, useAnalyticsOptions } from '../analytics-options'
 
 // ============================================================
 // Вторая волна аналитических реестров: журнал решений,

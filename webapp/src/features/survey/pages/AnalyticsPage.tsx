@@ -44,6 +44,7 @@ import {
   riskCriticalityColor,
 } from '../model'
 import { REPORT_PRINT_CSS } from '../report-print'
+import { domainName, useAnalyticsOptions } from '../analytics-options'
 import {
   BaselinesTab,
   CommunicationsTab,
@@ -57,8 +58,6 @@ import {
   useDeleteGapMutation,
   useDeleteRequirementMutation,
   useDeleteRiskMutation,
-  useDomainGroupsQuery,
-  useFindingsQuery,
   useGapsQuery,
   useRequirementsQuery,
   useRisksQuery,
@@ -125,23 +124,6 @@ export function AnalyticsPage() {
       </Tabs>
     </PageContainer>
   )
-}
-
-type DomainOption = { id: string; name: string }
-type FindingOption = { id: string; title: string }
-
-/** Домены и находки для селектов вкладок аналитики (общие для основной и второй волны). */
-export function useAnalyticsOptions() {
-  const { projectId } = useSurveyProject()
-  const groupsQuery = useDomainGroupsQuery(projectId)
-  const findingsQuery = useFindingsQuery(projectId)
-  const domains: DomainOption[] = (groupsQuery.data?.items ?? []).flatMap((group) => group.domains)
-  const findings: FindingOption[] = findingsQuery.data?.items ?? []
-  return { domains, findings }
-}
-
-export function domainName(domains: readonly DomainOption[], domainId: string | null): string {
-  return domains.find((domain) => domain.id === domainId)?.name ?? '—'
 }
 
 // ============================================================

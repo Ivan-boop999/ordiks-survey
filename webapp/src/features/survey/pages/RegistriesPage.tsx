@@ -1208,16 +1208,16 @@ function ImportDialog({
   const importEntries = useImportRegistryEntriesMutation(registry.id)
   const [text, setText] = useState('')
   const [hasHeader, setHasHeader] = useState(true)
-  const [mapping, setMapping] = useState<Record<number, string>>({})
+  // Только правки пользователя: базовый маппинг считается из заголовков при рендере.
+  const [overrides, setOverrides] = useState<Record<number, string>>({})
   const [statusId, setStatusId] = useState(registry.statuses[0]?.id ?? '')
 
   const preview = useMemo(() => previewImport(text, hasHeader), [text, hasHeader])
   const fields = importableFields(registry)
-
-  // Автомаппинг по заголовкам при изменении текста/флага заголовка.
-  useEffect(() => {
-    setMapping(suggestMapping(preview.headers, registry))
-  }, [hasHeader, preview.headers, registry])
+  const mapping: Record<number, string> = {
+    ...suggestMapping(preview.headers, registry),
+    ...overrides,
+  }
 
   const submit = () => {
     const apiMapping = mappingForApi(mapping)
@@ -1281,7 +1281,9 @@ function ImportDialog({
                     {header}
                   </Typography>
                   <Select
-                    onValueChange={(value) => setMapping((previous) => ({ ...previous, [index]: value }))}
+                    onValueChange={(value) =>
+                      setOverrides((previous) => ({ ...previous, [index]: value }))
+                    }
                     value={mapping[index] ?? 'skip'}
                   >
                     <SelectTrigger className="w-[200px]">
