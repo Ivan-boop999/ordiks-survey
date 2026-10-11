@@ -29,9 +29,15 @@ test.describe('Домены', () => {
     const description = dialog.locator('[data-slot="dialog-description"]')
     const before = await description.innerText()
 
-    const unchecked = dialog.getByTestId('checklist-items').locator('input[type="checkbox"]:not(:checked)').first()
-    await unchecked.click()
-    await expect(unchecked).toBeChecked()
+    // Локатор по :not(:checked) переселектируется на соседний пункт сразу после
+    // клика — берём стабильный aria-label первого непроверенного пункта.
+    const firstUnchecked = dialog.getByTestId('checklist-items').locator('input[type="checkbox"]:not(:checked)').first()
+    const itemLabel = ((await firstUnchecked.getAttribute('aria-label')) ?? '').trim()
+    expect(itemLabel.length).toBeGreaterThan(0)
+    const item = dialog.getByLabel(itemLabel, { exact: true })
+
+    await item.click()
+    await expect(item).toBeChecked()
 
     // Прогресс в описании модалки: «X из Y пунктов выполнено» — X вырос на 1.
     const match = before.match(/(\d+) из (\d+) пунктов/)
@@ -42,8 +48,8 @@ test.describe('Домены', () => {
     await shot(page, '07-domain-checklist')
 
     // Возвращаем состояние, чтобы не раскачивать демо-данные.
-    await unchecked.click()
-    await expect(unchecked).not.toBeChecked()
+    await item.click()
+    await expect(item).not.toBeChecked()
     await expect(description).toContainText(before.match(/\d+ из \d+ пунктов/)![0])
   })
 })

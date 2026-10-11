@@ -25,10 +25,10 @@ export function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
 
-/** Скриншот ключевого шага (полная страница). */
+/** Скриншот ключевого шага (полная страница). Лежит в git вместе со спеками. */
 export async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({
-    path: `e2e/.artifacts/demo-screens/${name}.png`,
+    path: `e2e/screenshots/${name}.png`,
     fullPage: true,
   })
 }
@@ -49,9 +49,16 @@ export async function logOut(page: Page): Promise<void> {
   await expect(page.getByTestId('login-form')).toBeVisible()
 }
 
-/** /survey → дашборд демо-проекта по умолчанию. */
+/**
+ * Дашборд демо-проекта. «/survey» открывает проект по умолчанию (updatedAt ↓), поэтому после
+ * тестов, создающих проекты, туда попадает свежий «E2E Проект…». Вместо полагания на порядок
+ * открываем демо-проект явно: список проектов → клик по карточке «ЖБИ-завод, Уфа».
+ */
 export async function openDemoProject(page: Page): Promise<void> {
-  await page.goto('/survey')
+  await page.goto('/survey/projects')
+  const demoCard = page.getByTestId('project-card').filter({ hasText: DEMO_PROJECT_NAME }).first()
+  await expect(demoCard).toBeVisible()
+  await demoCard.getByRole('link', { name: DEMO_PROJECT_NAME }).click()
   await expect(page.getByTestId('dashboard-kpis')).toBeVisible()
   await expect(page.getByTestId('dashboard-project-name')).toHaveText(DEMO_PROJECT_NAME)
 }

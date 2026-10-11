@@ -41,6 +41,7 @@ export function DemoAccessBlock({
               onPick({ email: account.email, password: demoPassword })
             }}
             size="sm"
+            type="button"
             variant="outline"
           >
             {account.label}

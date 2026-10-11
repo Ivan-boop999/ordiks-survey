@@ -122,6 +122,15 @@ export function createApp({
     bearerFormat: 'JWT',
   })
 
+  // Подписанные GET /storage/objects/* браузер встраивает как <img> с origin веб-приложения:
+  // webapp и API живут на разных origin и в деве (5173 vs 3100), и в проде. CORP same-origin
+  // из secureHeaders блокировал такие загрузки (net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin),
+  // из-за чего фото-факты не отображались. Регистрируется ДО secureHeaders, чтобы наш
+  // заголовок перезаписывал дефолтный после выполнения внутренней цепочки.
+  app.use('/storage/*', async (c, next) => {
+    await next()
+    c.res.headers.set('Cross-Origin-Resource-Policy', 'cross-origin')
+  })
   app.use(secureHeaders())
   app.use(
     '*',

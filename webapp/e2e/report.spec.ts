@@ -44,7 +44,7 @@ test.describe('Отчёт', () => {
 
     // PDF-выгрузка того, что уходит в печать.
     await page.pdf({
-      path: 'e2e/.artifacts/demo-screens/24-report-print.pdf',
+      path: 'e2e/screenshots/24-report-print.pdf',
       format: 'A4',
       printBackground: true,
     })
@@ -63,7 +63,7 @@ test.describe('Отчёт', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toContainText('Новый раздел')
     await dialog.getByTestId('section-title').fill(title)
-    await dialog.locator('#section-body-input').fill('<p>Текст раздела из E2E-теста.</p>')
+    await dialog.getByTestId('section-body-input').fill('<p>Текст раздела из E2E-теста.</p>')
     await dialog.getByTestId('section-save').click()
 
     await expect(page.locator(`[data-section-title="${title}"]`)).toBeVisible()

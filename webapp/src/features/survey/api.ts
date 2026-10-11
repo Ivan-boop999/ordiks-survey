@@ -15,7 +15,6 @@ import {
   createFindingRequestSchema,
   createInterviewRequestSchema,
   interviewDetailSchema,
-  interviewSchema,
   saveInterviewAnswersRequestSchema,
   saveInterviewAnswersResponseSchema,
   updateInterviewRequestSchema,
@@ -683,7 +682,9 @@ export function createInterview(
   projectId: string,
   input: CreateInterviewRequest,
 ) {
-  return transport.request(`/api/projects/${id(projectId)}/interviews`, interviewSchema, {
+  // Backend возвращает InterviewDetailDto (с массивом answers): строгая interviewSchema
+  // без answers отбраковывала ответ, и создание интервью в UI всегда падало.
+  return transport.request(`/api/projects/${id(projectId)}/interviews`, interviewDetailSchema, {
     method: 'POST',
     body: createInterviewRequestSchema.parse(input),
   })
@@ -701,7 +702,8 @@ export function updateInterview(
   interviewId: string,
   input: UpdateInterviewRequest,
 ) {
-  return transport.request(`/api/interviews/${id(interviewId)}`, interviewSchema, {
+  // Как и createInterview: сервер отвечает InterviewDetailDto (с answers).
+  return transport.request(`/api/interviews/${id(interviewId)}`, interviewDetailSchema, {
     method: 'PATCH',
     body: updateInterviewRequestSchema.parse(input),
   })

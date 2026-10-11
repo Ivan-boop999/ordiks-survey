@@ -67,11 +67,18 @@ export class ProjectsService {
   }
 
   async getProject(principal: AuthenticatedPrincipal, projectId: string): Promise<ProjectDetail> {
-    const access = await this.dependencies.guard.requireView(principal.id, projectId)
+    // requireView возвращает ещё и контекст (orgRole/memberRole) — в DTO на провод
+    // должны попасть только ключи ProjectAccess: строгая схема contracts
+    // (projectAccessSchema.strict) отбраковывает лишние поля, и веб-клиент ронял
+    // запрос деталей проекта целиком.
+    const { edit, comment, view } = await this.dependencies.guard.requireView(
+      principal.id,
+      projectId,
+    )
     const row = await this.dependencies.repository.findProjectById(projectId)
     if (!row) throw new ProjectsFailure('not_found', 'Project not found')
     const unread = await this.dependencies.repository.countUnreadComments(principal.id, [projectId])
-    return this.detailDto(row, access, unread.get(projectId) ?? 0)
+    return this.detailDto(row, { edit, comment, view }, unread.get(projectId) ?? 0)
   }
 
   async updateProject(

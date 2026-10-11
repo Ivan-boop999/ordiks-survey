@@ -10,6 +10,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ProcessDto, ProcessStepDto, ProcessSide } from '@ordiks-survey/contracts'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
@@ -790,13 +791,16 @@ function StepDialog({
 }
 
 function ZoomOverlay({ url, onClose }: { url: string; onClose: () => void }) {
-  return (
+  // Портал в body + z-[100]: лайтбокс перекрывает модалку процесса (диалог-портал z-50).
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+      // pointer-events-auto: открытый диалог ставит body pointer-events:none.
+      className="pointer-events-auto fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-6"
       onClick={onClose}
       role="presentation"
     >
       <img alt="" className="max-h-full max-w-full rounded-lg bg-white" src={url} />
-    </div>
+    </div>,
+    document.body,
   )
 }

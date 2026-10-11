@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test'
 
-import { DEMO_USERS, logIn, logOut, openDemoProject, openSection, shot, uniqueSuffix } from './demo-helpers'
+import { DEMO_USERS, logIn, openDemoProject, openSection, shot, uniqueSuffix } from './demo-helpers'
 
 test.describe('Приглашение', () => {
-  test('/invite?code=… → создание аккаунта → редирект в /survey', async ({ page }) => {
-    // Команда ОРДИКС создаёт приглашение в настройках проекта.
+  test('/invite?code=… → создание аккаунта → редирект в /survey', async ({ page, browser }) => {
+    // Команда ОРДИКС создаёт приглашение в настройках проекта (вкладка «Приглашения»).
     await logIn(page, DEMO_USERS.owner)
     await openDemoProject(page)
     await openSection(page, 'settings')
 
+    await page.getByRole('tab', { name: 'Приглашения' }).click()
     await page.getByTestId('invite-create-open').click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toContainText('Новое приглашение')
@@ -22,26 +23,32 @@ test.describe('Приглашение', () => {
     await shot(page, '27-invite-created')
 
     await page.keyboard.press('Escape')
-    await logOut(page)
+
+    // Переход по ссылке приглашения — в отдельном чистом контексте браузера
+    // (выход через меню сейчас подвешивает страницу /survey/* — продукт-баг, см. отчёт).
+    const inviteContext = await browser.newContext()
+    const invitePage = await inviteContext.newPage()
 
     // Переход по ссылке приглашения.
-    await page.goto(`/invite?code=${encodeURIComponent(code)}`)
-    await expect(page.getByTestId('invite-form')).toBeVisible()
-    await expect(page.getByTestId('invite-code')).toHaveValue(code)
+    await invitePage.goto(`/invite?code=${encodeURIComponent(code)}`)
+    await expect(invitePage.getByTestId('invite-form')).toBeVisible()
+    await expect(invitePage.getByTestId('invite-code')).toHaveValue(code)
 
     const email = `e2e-invite-${uniqueSuffix()}@demo.ordiks.ru`
-    await page.getByTestId('invite-email').fill(email)
-    await page.getByTestId('invite-name').fill('Инвайти E2E')
-    await page.getByTestId('invite-password').fill('ordiks-demo')
+    await invitePage.getByTestId('invite-email').fill(email)
+    await invitePage.getByTestId('invite-name').fill('Инвайти E2E')
+    await invitePage.getByTestId('invite-password').fill('ordiks-demo')
 
-    await shot(page, '28-invite-form')
+    await shot(invitePage, '28-invite-form')
 
-    await page.getByTestId('invite-submit').click()
+    await invitePage.getByTestId('invite-submit').click()
 
     // Аккаунт создан, выполнен вход и редирект в приложение обследования.
-    await expect(page.getByTestId('survey-navigation')).toBeVisible()
-    await expect(page).toHaveURL(/\/survey/)
+    await expect(invitePage.getByTestId('survey-navigation')).toBeVisible()
+    await expect(invitePage).toHaveURL(/\/survey/)
 
-    await shot(page, '29-invite-accepted')
+    await shot(invitePage, '29-invite-accepted')
+
+    await inviteContext.close()
   })
 })

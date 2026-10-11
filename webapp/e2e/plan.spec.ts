@@ -47,7 +47,35 @@ test.describe('План (канбан)', () => {
     const card = page.locator('[data-testid="kanban-column-todo"] [data-testid^="kanban-card-"]').first()
     const title = (await card.locator('h4').innerText()).trim()
 
-    await card.dragTo(page.getByTestId('kanban-column-done'))
+    // Нативный HTML5 drag через CDP-мышь в этом Chromium поднимается нестабильно
+    // (dragstart часто не срабатывает), а Input.dispatchDragEvent не умеет dragStart.
+    // Поэтому гоняем те же события через конструктор DragEvent: React-обработчики
+    // карточки и колонки (onDragStart/onDragOver/onDrop) отрабатывают по-настоящему —
+    // состояние, PATCH статуса и перерисовка канбана проверяются end-to-end.
+    // dragstart и drop — в разных evaluate с паузой: onDrop читает dragTaskId из
+    // стейта, и при синхронной очереди событий он ещё не успел бы закоммититься.
+    await page.evaluate((cardSelector) => {
+      const cardEl = document.querySelector(cardSelector)
+      if (!cardEl) throw new Error('kanban card not found')
+      cardEl.dispatchEvent(
+        new DragEvent('dragstart', { bubbles: true, dataTransfer: new DataTransfer() }),
+      )
+    }, '[data-testid="kanban-column-todo"] [data-testid^="kanban-card-"]')
+
+    await page.waitForTimeout(150)
+
+    await page.evaluate((columnSelector) => {
+      const columnEl = document.querySelector(columnSelector)
+      if (!columnEl) throw new Error('kanban column not found')
+      const data = new DataTransfer()
+      columnEl.dispatchEvent(
+        new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data }),
+      )
+      columnEl.dispatchEvent(
+        new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }),
+      )
+    }, '[data-testid="kanban-column-done"]')
+
     const inDone = page
       .locator('[data-testid="kanban-column-done"] [data-testid^="kanban-card-"]')
       .filter({ hasText: title })

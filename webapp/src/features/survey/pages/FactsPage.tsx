@@ -11,6 +11,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { FactDto } from '@ordiks-survey/contracts'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 
 import { PageContainer, PageHeader } from '@/components/PageLayout'
@@ -366,14 +367,19 @@ function FactViewDialog({
 }
 
 function ZoomOverlay({ url, onClose }: { url: string; onClose: () => void }) {
-  return (
+  // Портал в body + z-[100]: лайтбокс обязан перекрывать модалку факта — её диалог-портал
+  // (z-50) рендерится в конце body и иначе ложится поверх затемнения и перехватывает клики.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+      // pointer-events-auto: открытый диалог ставит body pointer-events:none,
+      // без этого лайтбокс не реагировал бы на клики вовсе.
+      className="pointer-events-auto fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-6"
       onClick={onClose}
       role="presentation"
     >
       <img alt="" className="max-h-full max-w-full rounded-lg" src={url} />
-    </div>
+    </div>,
+    document.body,
   )
 }
 

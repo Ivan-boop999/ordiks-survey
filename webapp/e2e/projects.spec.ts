@@ -9,6 +9,8 @@ test.describe('Проекты', () => {
     await logIn(page, DEMO_USERS.owner)
     await page.goto('/survey/projects')
 
+    // Ждём загрузки списка, иначе cardsBefore посчитается по пустой странице.
+    await page.getByTestId('project-card').first().waitFor()
     const cardsBefore = await page.getByTestId('project-card').count()
 
     await page.getByTestId('project-create-open').click()

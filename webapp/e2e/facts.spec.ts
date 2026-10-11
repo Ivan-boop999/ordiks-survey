@@ -38,20 +38,22 @@ test.describe('Факты', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog.locator('[data-slot="dialog-title"]')).toHaveText(PHOTO_FACT_TITLE)
 
-    // Фото загружается по подписанной ссылке — ждём img внутри модалки.
-    const photo = dialog.locator('img')
+    // Фото-факт: img с alt = название факта (в модалке есть и другие картинки —
+    // аватары комментариев), клик по нему открывает лайтбокс.
+    const photo = dialog.getByRole('img', { name: PHOTO_FACT_TITLE })
     await expect(photo).toBeVisible()
 
     await photo.click()
 
-    // Лайтбокс: фиксированный оверлей с увеличенным изображением.
-    const lightbox = page.locator('div.fixed.inset-0 img')
+    // Лайтбокс: фиксированный оверлей bg-black/80 с увеличенным изображением.
+    const lightbox = page.locator('div.fixed.inset-0.bg-black\\/80')
     await expect(lightbox).toBeVisible()
+    await expect(lightbox.locator('img')).toBeVisible()
 
     await shot(page, '13-fact-lightbox')
 
     // Клик по оверлею закрывает лайтбокс.
-    await page.locator('div.fixed.inset-0').click({ position: { x: 10, y: 10 } })
+    await lightbox.click({ position: { x: 10, y: 10 } })
     await expect(lightbox).toBeHidden()
   })
 })

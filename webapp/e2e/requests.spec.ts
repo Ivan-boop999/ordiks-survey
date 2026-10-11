@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
 
-import { DEMO_USERS, logIn, logOut, openDemoProject, openSection, pickOption, shot, uniqueSuffix } from './demo-helpers'
+import { DEMO_USERS, logIn, openDemoProject, openSection, pickOption, shot, uniqueSuffix } from './demo-helpers'
 
 test.describe('Запросы данных', () => {
-  test('создание запроса; заказчик берёт в работу и отмечает получение', async ({ page }) => {
+  test('создание запроса; заказчик берёт в работу и отмечает получение', async ({ page, browser }) => {
     const what = `E2E выгрузка отгрузок ${uniqueSuffix()}`
 
     // Команда ОРДИКС создаёт запрос и назначает ответственного с клиентской стороны.
@@ -25,36 +25,40 @@ test.describe('Запросы данных', () => {
     await dialog.getByTestId('request-save').click()
     await expect(page.getByTestId('request-row').filter({ hasText: what })).toBeVisible()
 
-    // Смена роли: выходим и входим директором заказчика.
-    await logOut(page)
-    await logIn(page, DEMO_USERS.clientLead)
-    await openDemoProject(page)
+    // Смена роли: отдельный чистый контекст браузера (выход через меню сейчас
+    // намертво подвешивает страницу /survey/* — заведён продукт-баг, см. отчёт).
+    const clientContext = await browser.newContext()
+    const clientPage = await clientContext.newPage()
+    await logIn(clientPage, DEMO_USERS.clientLead)
+    await openDemoProject(clientPage)
 
     // На дашборде клиента — блок «Ждём от вас» с нашим запросом и кнопками.
-    await expect(page.getByText('Ждём от вас', { exact: true })).toBeVisible()
-    const waitingRowText = page.getByTestId('dashboard-waiting-list').getByText(what, { exact: true })
-    await expect(waitingRowText).toBeVisible()
+    await expect(clientPage.getByText('Ждём от вас', { exact: true })).toBeVisible()
+    const waitingRows = clientPage.getByTestId('dashboard-waiting-list').locator(':scope > div')
+    const waitingRow = waitingRows.filter({ hasText: what })
+    await expect(waitingRow).toBeVisible()
 
-    await shot(page, '15-request-client-dashboard')
+    await shot(clientPage, '15-request-client-dashboard')
 
-    // «Взять в работу» — кнопка в соседнем блоке строки ожидания.
-    const startButton = waitingRowText.locator('xpath=../following-sibling::div[1]/button[1]')
-    await startButton.click()
-    await expect(
-      waitingRowText.locator('xpath=../following-sibling::div[1]').getByText('В работе'),
-    ).toBeVisible()
+    // «Взять в работу»: кнопка исчезает, остаётся только «Получено».
+    await waitingRow.getByRole('button', { name: 'Взять в работу' }).click()
+    await expect(waitingRow.getByRole('button', { name: 'Взять в работу' })).toHaveCount(0)
+    await expect(waitingRow.getByRole('button', { name: 'Получено' })).toBeVisible()
 
     // «Получено» — запрос уходит из списка ожидания.
-    const receivedButton = waitingRowText.locator('xpath=../following-sibling::div[1]/button[last()]')
-    await receivedButton.click()
-    await expect(waitingRowText).toHaveCount(0)
+    await waitingRow.getByRole('button', { name: 'Получено' }).click()
+    await expect(waitingRow).toHaveCount(0)
 
-    // В разделе «Запросы» строка со статусом «Получено».
-    await openSection(page, 'requests')
-    const row = page.getByTestId('request-row').filter({ hasText: what })
+    // В разделе «Запросы» (вкладка «Полученные» — по умолчанию открыты открытые)
+    // строка со статусом «Получено».
+    await openSection(clientPage, 'requests')
+    await clientPage.getByRole('button', { name: 'Полученные' }).click()
+    const row = clientPage.getByTestId('request-row').filter({ hasText: what })
     await expect(row).toBeVisible()
     await expect(row.getByText('Получено', { exact: true })).toBeVisible()
 
-    await shot(page, '16-request-received')
+    await shot(clientPage, '16-request-received')
+
+    await clientContext.close()
   })
 })
