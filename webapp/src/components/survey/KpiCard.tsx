@@ -44,7 +44,8 @@ export function KpiCard({
     <div
       className={cn(
         'relative flex flex-col gap-1.5 rounded-xl border bg-card p-4 shadow-sm',
-        clickable && 'cursor-pointer transition-colors hover:border-primary/50',
+        clickable &&
+          'cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md',
         className,
       )}
       onClick={onClick}
