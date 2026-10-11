@@ -9,9 +9,10 @@ import {
   MilestoneIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import type { ChipColor, DataRequestDto } from '@ordiks-survey/contracts'
 import { useMemo } from 'react'
+import { toast } from 'sonner'
 
 import { PageContainer } from '@/components/PageLayout'
 import { KpiCard, ProgressBar, SectionCard, StatusChip, UserAvatar } from '@/components/survey'
@@ -64,6 +65,16 @@ const KPI_ICONS: Record<string, React.ReactNode> = {
   requests: <HugeiconsIcon icon={InboxIcon} strokeWidth={2} />,
   milestone: <HugeiconsIcon icon={MilestoneIcon} strokeWidth={2} />,
   report: <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} />,
+}
+
+/** Куда ведёт клик по KPI-карточке: каждый показатель — в свой раздел. */
+const KPI_SECTION: Record<string, SurveySection> = {
+  coverage: 'domains',
+  interview: 'interviews',
+  findings: 'findings',
+  requests: 'requests',
+  milestone: 'stages',
+  report: 'report',
 }
 
 /** Ролевой дашборд проекта (по прототипу): KPI, «Ждём от заказчика/вас», этапы, домены. */
@@ -147,6 +158,7 @@ export function DashboardPage() {
     hour < 5 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер'
 
   const sectionHref = (section: SurveySection) => sectionPath(projectId, section)
+  const navigate = useNavigate()
 
   return (
     <PageContainer>
@@ -178,6 +190,7 @@ export function DashboardPage() {
             icon={KPI_ICONS[kpi.key]}
             key={kpi.key}
             label={kpi.label}
+            onClick={() => navigate({ to: sectionHref(KPI_SECTION[kpi.key]) })}
             tone={kpi.tone ?? 'default'}
             value={kpi.value}
           />
@@ -425,7 +438,15 @@ function WaitingRequestRow({
             <Button
               data-testid={`request-start-${request.id}`}
               disabled={updateStatus.isPending}
-              onClick={() => updateStatus.mutate({ requestId: request.id, status: 'in_progress' })}
+              onClick={() =>
+                updateStatus.mutate(
+                  { requestId: request.id, status: 'in_progress' },
+                  {
+                    onSuccess: () => toast.success('Запрос взят в работу'),
+                    onError: (error) => toast.error(error.message),
+                  },
+                )
+              }
               size="xs"
               variant="outline"
             >
@@ -436,7 +457,15 @@ function WaitingRequestRow({
           <Button
             data-testid={`request-received-${request.id}`}
             disabled={updateStatus.isPending}
-            onClick={() => updateStatus.mutate({ requestId: request.id, status: 'received' })}
+            onClick={() =>
+              updateStatus.mutate(
+                { requestId: request.id, status: 'received' },
+                {
+                  onSuccess: () => toast.success('Отмечено: данные получены'),
+                  onError: (error) => toast.error(error.message),
+                },
+              )
+            }
             size="xs"
           >
             <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} />
